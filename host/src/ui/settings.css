@@ -1,0 +1,24 @@
+:root { --bg: #0f1115; --card: #171a21; --line: #262a33; --text: #e8eaed; --muted: #9aa0a6; --accent: #5b7cfa; --ok: #4ade80; --bad: #f87171; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+main { padding: 18px; max-width: 520px; margin: 0 auto; }
+header { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+header img { border-radius: 10px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+.num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; }
+.status { color: var(--muted); font-size: 13px; }
+.status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+.status.on::before { background: var(--ok); }
+.status.off::before { background: var(--bad); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.card.live { border-color: #1f5133; background: #12241a; }
+.hint { color: var(--muted); font-size: 13px; margin: 4px 0; }
+.hint.ok { color: var(--ok); }
+.hint.err { color: var(--bad); }
+textarea { width: 100%; min-height: 80px; margin-top: 8px; padding: 10px; border-radius: 10px; border: 1px solid #333845; background: var(--bg); color: var(--text); font: 12px/1.4 Consolas, monospace; word-break: break-all; resize: vertical; }
+button { width: 100%; margin-top: 10px; padding: 10px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font: 600 14px "Segoe UI", system-ui; cursor: pointer; }
+button.danger { background: #3a1719; color: #fecaca; }
+.vcode { font: 600 26px/1.2 Consolas, monospace; letter-spacing: 2px; text-align: center; padding: 12px; background: var(--bg); border-radius: 10px; margin-top: 8px; user-select: all; }
+.check { display: flex; gap: 8px; align-items: center; }
+[hidden] { display: none !important; }

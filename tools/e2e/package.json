@@ -1,0 +1,14 @@
+{
+  "name": "pc-unlock-e2e",
+  "private": true,
+  "description": "Pruebas de punta a punta: broker MQTT local, web app servida localmente, Playwright con autenticador WebAuthn virtual",
+  "scripts": {
+    "broker": "node broker.js"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3",
+    "playwright": "^1.64.0",
+    "websocket-stream": "^5.5.2",
+    "ws": "^8.22.0"
+  }
+}

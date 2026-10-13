@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.1">
+  <link rel="stylesheet" href="style.css?v=1.3">
 </head>
 <body>
   <main id="app">
@@ -58,7 +58,78 @@
         </button>
       </div>
 
+      <button id="btnRemote" class="remote-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Pantalla remota</span>
+      </button>
+
       <div id="result" class="result" hidden></div>
+    </section>
+
+    <!-- Remoto: pantalla en vivo + touchpad + teclado + multimedia -->
+    <section id="remote" hidden>
+      <div class="rbar">
+        <button id="rBack" class="icon-btn" aria-label="Volver">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="rtitle">
+          <div id="rStatus" class="rstatus"></div>
+          <div id="rStats" class="rstats"></div>
+        </div>
+        <button id="rFull" class="icon-btn" aria-label="Pantalla completa">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="rmain">
+        <div id="stage" class="stage">
+          <video id="rVideo" playsinline muted autoplay></video>
+          <div id="rOverlay" class="overlay">
+            <div id="rOvText">…</div>
+            <button id="rConnect" class="ov-btn">Conectar con Face ID</button>
+            <button id="rOvUnlock" class="ov-btn secondary" hidden>Desbloquear la compu</button>
+          </div>
+          <div id="rLocked" class="overlay locked" hidden>
+            <div>🔒 La compu está bloqueada.<br><small>Windows no deja ver ni controlar la pantalla de bloqueo.</small></div>
+            <button id="rLockUnlock" class="ov-btn">Desbloquear</button>
+          </div>
+        </div>
+
+        <div class="rside">
+          <div class="rtools">
+            <button data-panel="pad">Touchpad</button>
+            <button data-panel="kbd">Teclado</button>
+            <button data-panel="media">Multimedia</button>
+          </div>
+          <div class="ropts">
+            <select id="rMonitor" hidden aria-label="Monitor"></select>
+            <label class="switch"><input type="checkbox" id="rSaver"> Ahorro de datos</label>
+          </div>
+          <div id="rSession" class="rsession" hidden>
+            Sesión: <b id="rLeft"></b>
+            <button id="rRenew" class="mini" hidden>Renovar con Face ID</button>
+            <button id="rEnd" class="mini secondary">Cortar</button>
+          </div>
+
+          <div id="panel-pad" class="panel" hidden>
+            <div id="pad" class="pad"><span>clic izquierdo</span><span>clic derecho</span></div>
+            <p class="hint center">Arrastrá para mover · tocá para hacer clic · dos dedos = scroll · tocar y volver a apoyar = arrastrar</p>
+          </div>
+          <div id="panel-kbd" class="panel" hidden>
+            <div id="kbd" class="kbd"></div>
+          </div>
+          <div id="panel-media" class="panel" hidden>
+            <div class="media">
+              <button data-media="b6" aria-label="Anterior">⏮</button>
+              <button data-media="cd" aria-label="Play / pausa">⏯</button>
+              <button data-media="b5" aria-label="Siguiente">⏭</button>
+              <button data-media="e2" aria-label="Silencio">🔇</button>
+              <button data-media="ea" data-repeat="1" aria-label="Bajar volumen">🔉</button>
+              <button data-media="e9" data-repeat="1" aria-label="Subir volumen">🔊</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Configuración -->
@@ -97,6 +168,32 @@
       </div>
 
       <div class="card">
+        <h2><span class="num">4</span> Compu (pantalla remota)</h2>
+        <p class="hint">Instalá <a id="hostDownload" class="inline" href="https://github.com/">PC Unlock Host</a> en la compu y pegale
+          el código del paso 3. Después compará el código de verificación.</p>
+        <div id="hostPairState" class="hint"></div>
+        <div id="hostCodeBox" hidden>
+          <div id="hostCode" class="vcode"></div>
+          <button id="btnHostMatch">Coinciden</button>
+          <button id="btnHostNoMatch" class="secondary">No coinciden</button>
+        </div>
+        <button id="btnHostForget" class="secondary" hidden>Olvidar esta compu</button>
+      </div>
+
+      <div class="card">
+        <h2>TURN (opcional)</h2>
+        <p class="hint">Solo si con datos móviles la pantalla remota no conecta. Ver README → “TURN”.</p>
+        <label for="turnUrl">Dirección (turn: o turns:)</label>
+        <input id="turnUrl" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="turns:turn.ejemplo.com:443?transport=tcp">
+        <label for="turnUser">Usuario</label>
+        <input id="turnUser" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <label for="turnPass">Contraseña</label>
+        <input id="turnPass" type="password">
+        <button id="btnSaveTurn" class="secondary">Guardar TURN</button>
+        <div id="turnMsg" class="hint"></div>
+      </div>
+
+      <div class="card">
         <h2>Otros</h2>
         <a class="link" href="instalar/">Instalar o actualizar el programa de la ESP →</a>
         <button id="btnReset" class="danger">Borrar configuración de esta app</button>
@@ -107,6 +204,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.1"></script>
+  <script src="app.js?v=1.3"></script>
+  <script src="remote.js?v=1.3"></script>
 </body>
 </html>

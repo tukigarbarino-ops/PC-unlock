@@ -40,7 +40,11 @@ const topics = () => ({
   cmd: `pcu/${cfg.topic}/cmd`,
   resp: `pcu/${cfg.topic}/resp`,
   state: `pcu/${cfg.topic}/state`,
+  hostState: `pcu/${cfg.topic}/host/state`, // programa PC Unlock Host en la compu
+  hostIn: `pcu/${cfg.topic}/host/in`,
+  hostOut: `pcu/${cfg.topic}/host/out`,
 });
+const subTopics = () => [topics().state, topics().resp, topics().hostState, topics().hostOut];
 
 // CBOR mínimo (solo lo necesario para leer la clave pública de la passkey)
 function cborDecode(bytes, pos = 0) {
@@ -108,8 +112,10 @@ async function createKey() {
 }
 
 // Firma una orden con Face ID y devuelve el mensaje a publicar.
-async function signCommand(cmd) {
-  const payload = { c: cmd, t: Math.floor(Date.now() / 1000), n: randHex(12) };
+// extra: campos adicionales del challenge (sesión remota: fingerprint DTLS, id del host, etc.).
+// Ojo iOS: credentials.get tiene que ser lo primero que se espera después del toque.
+async function signCommand(cmd, extra = {}) {
+  const payload = { c: cmd, t: Math.floor(Date.now() / 1000), n: randHex(12), ...extra };
   const challenge = new TextEncoder().encode(JSON.stringify(payload));
   const a = await navigator.credentials.get({
     publicKey: {
@@ -159,7 +165,7 @@ function connect() {
   });
   client.on('connect', () => {
     setConn('Conectado', 'on');
-    if (cfg.topic) client.subscribe([topics().state, topics().resp], { qos: 1 });
+    if (cfg.topic) client.subscribe(subTopics(), { qos: 1 });
     $('#mqttMsg').textContent = '✔ Conectado al servidor';
     $('#mqttMsg').className = 'hint ok';
   });
@@ -175,6 +181,7 @@ function connect() {
     try { m = JSON.parse(buf.toString()); } catch { return; }
     if (topic === topics().state) renderState(m);
     else if (topic === topics().resp && waiting.has(m.n)) { waiting.get(m.n)(m); waiting.delete(m.n); }
+    else if (topic === topics().hostState || topic === topics().hostOut) onHostMessage(topic, m); // remote.js
   });
 }
 
@@ -186,11 +193,19 @@ function waitConnected(ms) {
   });
 }
 
-function waitResponse(nonce, ms) {
+function waitResponse(nonce, ms, map = waiting) {
   return new Promise((resolve) => {
-    const t = setTimeout(() => { waiting.delete(nonce); resolve(null); }, ms);
-    waiting.set(nonce, (m) => { clearTimeout(t); resolve(m); });
+    const t = setTimeout(() => { map.delete(nonce); resolve(null); }, ms);
+    map.set(nonce, (m) => { clearTimeout(t); resolve(m); });
   });
+}
+
+// Manda una orden ya firmada a la ESP y espera la respuesta.
+async function sendToEsp(signed, cmd) {
+  if (!(await waitConnected(8000))) return { ok: false, msg: 'No hay conexión con el servidor MQTT.' };
+  client.publish(topics().cmd, JSON.stringify(signed.msg), { qos: 1 });
+  const r = await waitResponse(signed.nonce, cmd === 'unlock' ? 20000 : 12000);
+  return r || { ok: false, msg: 'La ESP no respondió. ¿Está enchufada y con WiFi?' };
 }
 
 // ------------------------------------------------------------ interfaz
@@ -246,11 +261,8 @@ async function runCommand(cmd, btn) {
       return;
     }
     showResult('Enviando…');
-    if (!(await waitConnected(8000))) { showResult('No hay conexión con el servidor MQTT.', false); return; }
-    client.publish(topics().cmd, JSON.stringify(signed.msg), { qos: 1 });
-    const r = await waitResponse(signed.nonce, cmd === 'unlock' ? 20000 : 12000);
-    if (!r) showResult('La ESP no respondió. ¿Está enchufada y con WiFi?', false);
-    else if (r.ok) showResult(OK_TEXT[cmd] || 'Listo.', true);
+    const r = await sendToEsp(signed, cmd);
+    if (r.ok) showResult(OK_TEXT[cmd] || 'Listo.', true);
     else showResult(r.msg || 'Error', false);
   } finally {
     btn.classList.remove('busy');
@@ -273,9 +285,11 @@ function refreshSettings() {
     $('#btnCreateKey').textContent = 'Crear llave con Face ID';
   }
   $('#pairCode').value = pairCode();
+  refreshHostSettings(); // remote.js
 }
 
 function showSettings() {
+  leaveRemote(); // remote.js
   $('#home').hidden = true;
   $('#settings').hidden = false;
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -285,6 +299,7 @@ function showSettings() {
   scrollTo(0, 0);
 }
 function showHome() {
+  leaveRemote(); // remote.js
   $('#settings').hidden = true;
   $('#home').hidden = false;
 }
@@ -333,7 +348,7 @@ $('#btnCreateKey').addEventListener('click', async () => {
   try {
     await createKey();
     refreshSettings();
-    if (client?.connected) client.subscribe([topics().state, topics().resp], { qos: 1 });
+    if (client?.connected) client.subscribe(subTopics(), { qos: 1 });
   } catch (e) {
     $('#keyState').textContent = e?.name === 'NotAllowedError' ? 'Cancelado.' : 'Error: ' + e.message;
     $('#keyState').className = 'hint err';
@@ -365,6 +380,5 @@ document.addEventListener('visibilitychange', () => {
 
 // ------------------------------------------------------------ inicio
 
-window.PCU = { signCommand, pairCode, createKey, cfg: () => cfg }; // para pruebas
-if (!cfg.credId || !cfg.host) showSettings();
-connect();
+window.PCU = { signCommand, pairCode, createKey, cfg: () => cfg, saveCfg, connect }; // para pruebas
+// El inicio está al final de remote.js (se carga después de este archivo).

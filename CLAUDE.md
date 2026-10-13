@@ -20,7 +20,9 @@ ESP32 (WROOM-32D clásica) ── Wake-on-LAN ─────────► com
                                                      System Power Down (apagar)
 ```
 
-- **No se instala nada en Windows**: la ESP es un teclado Bluetooth para Windows.
+- Prender/apagar/desbloquear/bloquear: **no se instala nada en Windows** (la ESP es un teclado Bluetooth).
+- Vista **Remoto** (pantalla en vivo + touchpad + teclado + multimedia): requiere **PC Unlock Host** (`host/`, Electron)
+  en Windows. Ver la sección "Host de Windows".
 - La web app está en GitHub Pages (`https://<usuario>.github.io/PC-unlock/`), repo **público**.
 - Pensado para usarse en **más de una casa**: la ESP guarda hasta 3 WiFi y viaja con la compu
   (el Wake-on-LAN solo funciona dentro de la misma LAN).
@@ -33,8 +35,12 @@ ESP32 (WROOM-32D clásica) ── Wake-on-LAN ─────────► com
 | `firmware/build.sh` | Compila con arduino-cli y arma un `.bin` único (merge-bin) |
 | `firmware/test/` | `verify_test.cpp` + fixtures: prueba en PC de `auth.cpp` con aserciones WebAuthn reales |
 | `web/` | Web app: `index.html`, `app.js`, `style.css`, `manifest.webmanifest`, íconos, `vendor/mqtt-5.15.2.min.js` |
+| `web/remote.js` | Vista Remoto: WebRTC, emparejamiento del host, touchpad, teclado LatAm, multimedia, zoom |
 | `web/instalar/` | Página ESP Web Tools 10.4.0 para flashear desde el navegador (en la práctica el usuario usa el Arduino IDE) |
+| `host/` | PC Unlock Host (Electron 44): `src/main.js` (MQTT, sesión, bandeja), `webauthn.js`, `identity.js`, `input.js` (SendInput vía koffi), `protocol.js`, `rtc/` (ventana oculta WebRTC), `ui/` (ventana de configuración) |
+| `tools/e2e/` | Broker aedes (TCP 1883 + WS 8888) + servidor de `web/` en :8000 + `remote.e2e.js` (Playwright/Edge + host real) |
 | `.github/workflows/build.yml` | En cada push a `main`: compila firmware, corre `verify_test`, publica `web/` + firmware en Pages |
+| `.github/workflows/host.yml` | windows-latest: `npm ci`, `npm test`, electron-builder (NSIS). Tag `host-vX.Y.Z` → Release |
 
 ## Firmware ESP32
 
@@ -100,11 +106,55 @@ activados en la placa de red, inicio rápido desactivado, botón de encendido = 
 - `cfg.testUrl` permite apuntar a un broker local `ws://` solo para pruebas.
 - Cache-busting con `?v=` en `index.html` cuando cambian `app.js`/`style.css`.
 
+## Host de Windows (PC Unlock Host, `host/`)
+
+- **Electron 44** (elegido por: WebRTC de Chromium con H.264 por hardware vía Media Foundation/NVENC, control de
+  congestión incluido, `desktopCapturer`, bandeja, `setLoginItemSettings`, electron-builder). Entrada con
+  **koffi** (FFI precompilado, sin compilar nada nativo) → `SendInput`. npm 11 bloquea scripts de instalación:
+  `allowScripts` en `package.json` aprueba koffi, electron, electron-winstaller; el binario de Electron se baja
+  con `npx install-electron` (solo para correrlo; electron-builder baja el suyo).
+- Config en `%APPDATA%\PC Unlock Host\config.json`; el código PCU1 y la clave de identidad van cifrados con
+  `safeStorage` (DPAPI). Instalador NSIS oneClick por usuario (sin admin), arranca con `--hidden`.
+- **DPI**: `SetThreadDpiAwarenessContext(PER_MONITOR_AWARE_V2)`; el mouse se mueve en **absoluto sobre el escritorio
+  virtual** (`MOUSEEVENTF_VIRTUALDESK`, normalizado con `ceil(x*65536/w)` → vuelve exacto al píxel; probado sin
+  error acumulado). Teclas = **usos HID → scancodes** (`KEYEVENTF_SCANCODE`), así Windows aplica la distribución
+  instalada (**Español Latinoamérica, 0000080a**). Multimedia = VK_MEDIA_*/VK_VOLUME_*.
+- Variables solo para pruebas: `PCU_USERDATA`, `PCU_MQTT_URL`, `PCU_PAIR_CODE`, `PCU_SIMULATE_INPUT=1`,
+  `PCU_LOG_INPUT=1`, `PCU_LOG_STATS=1`, `PCU_SESSION_SECS`, `PCU_NO_WINDOW=1`, `PCU_TEST_HOOKS=1` (simular bloqueo
+  por `pcu/<t>/host/in/test`).
+- Sin sesión no captura nada (la ventana WebRTC se crea por sesión y se destruye al terminar).
+
+### Protocolo de la sesión remota
+Temas: `pcu/<t>/host/state` (retenido, LWT `{"online":false}`: `online, v, id, k (clave pública 65 B b64url),
+locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host → app).
+- **Emparejar**: la app lee `k` de `host/state` y muestra `verificationCode` = base32 Crockford de los primeros 80 bits
+  de `SHA256("PCU-ID|host|" || pub)` (`XXXX-XXXX-XXXX-XXXX`); el host muestra el mismo. Al confirmar, la app guarda
+  `cfg.hostKey` y `cfg.hostId` (= primeros 8 B de SHA256(pub) en hex). Si `k` cambia, la app avisa y no conecta.
+- **Abrir**: la app prepara la oferta (recvonly video + DataChannels `ctl` y `in`, ICE completo, sin trickle) **al
+  abrir la vista**, así el toque llama a `credentials.get` enseguida (se rehace cada 60 s). Challenge
+  `{"c":"rs","t","n","f":<fingerprint sha-256 de la oferta>,"h":<hostId>,"m":<monitor>,"q":"auto"|"saver"}`.
+  Mensaje `{"type":"open","sdp","ice","ad","cd","sig","id"}`. El host verifica todo + `f` == fingerprint del SDP
+  + `h` == su id. Responde `{"type":"answer","n","sdp","exp","hs"}` con `hs` = ECDSA P-256 (r||s) sobre
+  `PCU-HOST-ANSWER|n|fo|fa|exp`; o `{"type":"error","n","msg"}`. La app verifica `hs` con la clave fijada y `fa`.
+- **Control** (`ctl`, JSON): host→app `hello{exp,locked,monitors,monitor}`, `locked{v}`, `stats{codec,hw,w,h,fps,kbps,route}`,
+  `renewed{n,exp,hs}` (`PCU-HOST-RENEW|n|fo|fa|exp`), `bye{why}`, `error`; app→host `monitor{id}`, `quality{mode}`,
+  `renew{ad,cd,sig}` (challenge `c:"rr"` con el mismo `f` y `h`), `pause`/`resume` (app en segundo plano), `bye`.
+- Sesión máx. `SESSION_SECS` = 3600 s desde el último Face ID; si no conecta en 30 s, se descarta.
+- **Entrada** (`in`, binario, igual para host y ESP): `01 u` tecla abajo, `02 u` arriba (uso HID), `03 dx dy` (i16 LE),
+  `04 m`/`05 m` botón abajo/arriba (1 izq, 2 der, 4 medio), `06 v h` rueda (i16, 120 = un paso), `07 uu` multimedia
+  (uso Consumer u16), `08` soltar todo, `09` latido. La app manda latido cada 500 ms mientras haya algo apretado;
+  el host suelta todo a los 2 s sin mensajes. La app repite teclas mantenidas (SendInput no repite).
+
 ## Pruebas que existen
 - `firmware/test/verify_test.cpp`: compila `auth.cpp` contra mbedtls 2.28 + ArduinoJson y verifica aserciones
   reales (fixtures generados con Chromium + autenticador virtual de WebAuthn por CDP). Corre en CI.
-- Prueba de punta a punta usada en desarrollo: Playwright + autenticador virtual, broker MQTT local (aedes con
-  websocket-stream) + `testUrl`, y una "ESP falsa" en Python que valida con `verify_test`.
+- `host/test/*.test.js` (`npm test`, corre en CI): verificación WebAuthn con los **mismos fixtures** que la ESP,
+  fingerprint DTLS, identidad, protocolo de entrada, soltar a los 2 s. `host/test/manual-input.js`: SendInput real
+  e inofensivo (solo en la PC).
+- `tools/e2e/remote.e2e.js`: Playwright (canal `msedge`, que trae H.264; `E2E_CHANNEL=` usa Chromium) con autenticador
+  virtual por CDP + broker aedes + **host real** con entrada simulada (`E2E_HOST_EXE` prueba el `.exe` empaquetado,
+  `E2E_SHOTS=<dir>` guarda capturas — ojo: muestran la pantalla real, no commitearlas). 27 verificaciones, incluye
+  ataques desde el broker (`aedes.authorizeForward` altera la respuesta del host).
 
 ## Reglas
 - **Repo público: nunca commitear datos personales** (MAC, IPs, emails, host de EMQX, usuarios, contraseñas, PIN,
@@ -113,9 +163,10 @@ activados en la placa de red, inicio rápido desactivado, botón de encendido = 
 - Actualizaciones de firmware sin borrar la configuración; subir `FW_VERSION` en `config.h`.
 - Antes de cualquier acción destructiva (borrar flash, force push, quitar vínculos) preguntar.
 
-## Decisiones tomadas para lo próximo (todavía no implementado)
+## Decisiones de la vista Remoto (fase 1 implementada: host + web app)
 - **Pantalla, mouse y teclado dentro de la misma web app** (no apps aparte; Chrome Remote Desktop no se puede
-  embeber). Requiere un programa host en Windows (ver el pedido del usuario).
+  embeber). Implementado con PC Unlock Host (`host/`).
+- Video con `playsinline` y `muted`. Distribución del teclado: **Español (Latinoamérica)**.
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.
 - **Teclado propio dibujado en la app** (no el del iPhone): todas las letras y números, F1–F12, Esc, Tab, Enter,

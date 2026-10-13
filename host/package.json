@@ -1,0 +1,67 @@
+{
+  "name": "pc-unlock-host",
+  "productName": "PC Unlock Host",
+  "version": "1.0.0",
+  "description": "Pantalla, mouse y teclado de la compu desde la web app de PC Unlock",
+  "main": "src/main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "koffi": "^3.3.3",
+    "mqtt": "^5.16.0"
+  },
+  "devDependencies": {
+    "electron": "^44.7.1",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "koffi@3.3.3": true,
+    "electron-winstaller@5.4.0": true,
+    "electron@44.7.1": true
+  },
+  "author": "PC Unlock",
+  "build": {
+    "appId": "io.github.pcunlock.host",
+    "productName": "PC Unlock Host",
+    "artifactName": "PC-Unlock-Host-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PC Unlock Host",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": null
+  }
+}

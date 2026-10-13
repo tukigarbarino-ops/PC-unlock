@@ -1,0 +1,62 @@
+name: Host de Windows
+
+# Compila el instalador de PC Unlock Host. En cada push a main que toque host/ queda como artefacto;
+# con un tag host-vX.Y.Z (igual a la versión de host/package.json) se publica como Release.
+on:
+  push:
+    branches: [main]
+    paths: ['host/**', '.github/workflows/host.yml']
+    tags: ['host-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: host
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: host/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas (WebAuthn con los fixtures del firmware, protocolo de entrada)
+        run: npm test
+
+      - name: Versión del tag igual a package.json
+        if: startsWith(github.ref, 'refs/tags/host-v')
+        shell: bash
+        run: |
+          V=$(node -p "require('./package.json').version")
+          test "${GITHUB_REF_NAME}" = "host-v$V" || { echo "El tag ${GITHUB_REF_NAME} no coincide con la versión $V"; exit 1; }
+
+      - name: Compilar instalador
+        run: npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PC-Unlock-Host-Setup
+          path: host/dist/*.exe
+          if-no-files-found: error
+
+      - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/host-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PC Unlock Host ${{ github.ref_name }}
+          files: host/dist/*.exe
+          body: |
+            Instalador de **PC Unlock Host** para Windows (pantalla, mouse y teclado desde la web app).
+            Descargá `PC-Unlock-Host-Setup-*.exe` y ejecutalo. Como no está firmado, Windows puede mostrar
+            "Windows protegió su PC": tocá **Más información → Ejecutar de todos modos**.
+            Instrucciones completas en el README.
