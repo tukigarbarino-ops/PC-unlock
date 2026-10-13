@@ -24,6 +24,7 @@ struct Command {
   std::string cmd;
   int64_t t = 0;
   std::string nonce;
+  std::string e;  // sesión remota: clave ECDH efímera de la app (b64url, 65 B), opcional
 };
 
 // Datos del código de emparejamiento "PCU1.<base64url(json)>".

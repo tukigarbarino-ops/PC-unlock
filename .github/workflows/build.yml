@@ -54,6 +54,11 @@ jobs:
             firmware/test/verify_test.cpp firmware/pc-unlock/auth.cpp /tmp/mbedtls/library/libmbedcrypto.a -o /tmp/verify_test
           /tmp/verify_test "$(cat firmware/test/fixtures/code.txt)" firmware/test/fixtures/msgs.jsonl
 
+      - name: Prueba de la sesión de teclado/mouse por la ESP (session.cpp contra WebCrypto)
+        run: |
+          g++ -std=c++17 -I/tmp/mbedtls/include -I$HOME/Arduino/libraries/ArduinoJson/src             firmware/test/session_test.cpp firmware/pc-unlock/session.cpp firmware/pc-unlock/auth.cpp             /tmp/mbedtls/library/libmbedcrypto.a -o /tmp/session_test
+          node firmware/test/session_interop.mjs /tmp/session_test
+
       - name: Armar sitio
         run: |
           cp -r web site

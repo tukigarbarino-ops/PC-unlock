@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.3">
+  <link rel="stylesheet" href="style.css?v=1.4">
 </head>
 <body>
   <main id="app">
@@ -90,7 +90,8 @@
             <button id="rOvUnlock" class="ov-btn secondary" hidden>Desbloquear la compu</button>
           </div>
           <div id="rLocked" class="overlay locked" hidden>
-            <div>🔒 La compu está bloqueada.<br><small>Windows no deja ver ni controlar la pantalla de bloqueo.</small></div>
+            <div>🔒 La compu está bloqueada.<br><small>Windows no deja ver la pantalla de bloqueo.</small>
+              <br><small id="rLockEsp" hidden>El teclado de la app sigue andando por la ESP (Bluetooth).</small></div>
             <button id="rLockUnlock" class="ov-btn">Desbloquear</button>
           </div>
         </div>
@@ -181,6 +182,21 @@
       </div>
 
       <div class="card">
+        <h2><span class="num">5</span> ESP (teclado y mouse de respaldo)</h2>
+        <p class="hint">Si el programa de la compu no está (compu bloqueada, recién prendida o colgado), el teclado, el touchpad
+          y la multimedia van por la ESP como teclado/mouse Bluetooth, cifrados. Necesita la ESP con la versión 1.3.0.</p>
+        <div id="espPairState" class="hint"></div>
+        <div id="espCodeBox" hidden>
+          <div id="espCode" class="vcode"></div>
+          <p class="hint">Comparalo con el de la página de configuración de la ESP (BOOT 3 s → WiFi <b>PC-Unlock-XXXX</b> →
+            “Código de verificación de esta ESP”).</p>
+          <button id="btnEspMatch">Coinciden</button>
+          <button id="btnEspNoMatch" class="secondary">No coinciden</button>
+        </div>
+        <button id="btnEspForget" class="secondary" hidden>Olvidar esta ESP</button>
+      </div>
+
+      <div class="card">
         <h2>TURN (opcional)</h2>
         <p class="hint">Solo si con datos móviles la pantalla remota no conecta. Ver README → “TURN”.</p>
         <label for="turnUrl">Dirección (turn: o turns:)</label>
@@ -204,7 +220,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.3"></script>
-  <script src="remote.js?v=1.3"></script>
+  <script src="app.js?v=1.4"></script>
+  <script src="remote.js?v=1.4"></script>
 </body>
 </html>

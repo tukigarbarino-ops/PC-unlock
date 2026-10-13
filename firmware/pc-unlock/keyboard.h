@@ -29,3 +29,6 @@ void kbTap(uint8_t modifiers, uint8_t key, uint16_t holdMs = 30);
 bool kbTypeChar(char c);
 // Tecla de sistema (SYS_POWER_DOWN, SYS_SLEEP, SYS_WAKE).
 void kbSystem(uint8_t bits);
+// Entrada remota ya descifrada (protocolo binario de la vista Remoto). Suelta todo sola a los 2 s sin mensajes.
+void kbInput(const uint8_t* data, size_t len);
+void kbReleaseAll();

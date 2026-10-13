@@ -10,12 +10,17 @@ const OFFER_MAX_AGE = 60000;     // la oferta preparada se renueva si no se usa 
 const RENEW_BEFORE = 5 * 60;     // ofrecer "Renovar" 5 min antes de que venza la hora
 
 let hostState = null;            // último pcu/<t>/host/state
+let espState = null;             // último pcu/<t>/state (la ESP)
 const waitingHost = new Map();   // nonce -> resolve (respuestas del host)
 const R = {
   visible: false,
   prepared: null,                // { pc, sdp, fp, at, ctl, inp, video }
   preparing: null,
-  live: null,                    // sesión activa: { pc, ctl, inp, fo, fa, exp, n }
+  live: null,                    // sesión activa con el host: { pc, ctl, inp, fo, fa, exp, n }
+  esp: null,                     // sesión activa con la ESP: { key (AES-GCM), seq, exp, q (cola de envíos) }
+  ecdh: null,                    // clave ECDH efímera lista para el próximo Face ID: { priv, pubB64 }
+  locked: false,                 // la compu está en la pantalla de bloqueo (SendInput no llega; la ESP sí)
+  notice: null,                  // aviso que queda arriba del estado (por qué se cortó, error al conectar)
   quality: 'auto',
   held: new Set(),               // teclas apretadas (uso HID)
   buttons: 0,
@@ -74,6 +79,7 @@ function onHostMessage(topic, m) {
   if (topic === topics().hostState) {
     hostState = m;
     refreshHostSettings();
+    if (R.visible && !R.live && !R.prepared && hostUsable()) prepareOffer();
     refreshRemoteOverlay();
   } else if (topic === topics().hostOut && m && waitingHost.has(m.n)) {
     waitingHost.get(m.n)(m);
@@ -84,6 +90,91 @@ function onHostMessage(topic, m) {
 const hostPaired = () => !!(cfg.hostKey && cfg.hostId);
 const hostOnline = () => !!(hostState && hostState.online && hostState.k);
 const hostKeyChanged = () => hostPaired() && hostOnline() && hostState.k !== cfg.hostKey;
+const espPaired = () => !!cfg.espKey;
+const espOnline = () => !!(espState && espState.online && espState.k && espState.in);
+const espKeyChanged = () => espPaired() && espOnline() && espState.k !== cfg.espKey;
+const hostUsable = () => hostPaired() && hostOnline() && !hostKeyChanged();
+const espUsable = () => espPaired() && espOnline() && !espKeyChanged();
+
+function onEspState(m) {
+  espState = m;
+  refreshEspSettings();
+  refreshRemoteOverlay();
+}
+
+// Ajustes: emparejar la ESP (mismo esquema que la compu: comparar códigos)
+async function refreshEspSettings() {
+  const st = $('#espPairState');
+  if (!st) return;
+  $('#espCodeBox').hidden = true;
+  $('#btnEspForget').hidden = !espPaired();
+  if (!cfg.topic) { st.textContent = 'Primero completá los pasos de arriba.'; st.className = 'hint'; return; }
+  if (!espState || !espState.online) {
+    st.textContent = espPaired() ? '✔ Emparejada. La ESP ahora no está conectada.' : 'La ESP no está conectada.';
+    st.className = 'hint' + (espPaired() ? ' ok' : '');
+    return;
+  }
+  if (!espState.k) { st.textContent = `La ESP tiene la versión ${espState.v || 'vieja'}: actualizala a la 1.3.0 o más nueva.`; st.className = 'hint err'; return; }
+  const code = await verifyCode(b64u.dec(espState.k), 'esp');
+  if (espPaired() && !espKeyChanged()) { st.textContent = `✔ Emparejada (código ${code}).`; st.className = 'hint ok'; return; }
+  st.textContent = espKeyChanged()
+    ? '⚠ La ESP se presenta con OTRA clave (¿la borraste o le cargaste otra configuración?). Compará el código nuevo; si no coincide, no confirmes.'
+    : 'Compará este código con el de la página de configuración de la ESP:';
+  st.className = 'hint' + (espKeyChanged() ? ' err' : '');
+  $('#espCode').textContent = code;
+  $('#espCodeBox').hidden = false;
+  $('#espCodeBox').dataset.key = espState.k;
+}
+
+// Clave ECDH efímera para la sesión con la ESP. Se crea ANTES del toque (WebCrypto es asíncrono y
+// Face ID tiene que ser lo primero tras el toque). La privada no se puede exportar.
+async function prepareEcdh() {
+  if (R.ecdh || !espPaired()) return;
+  const k = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+  R.ecdh = { priv: k.privateKey, pubB64: b64u.enc(await crypto.subtle.exportKey('raw', k.publicKey)) };
+}
+
+// Respuesta de la ESP a "rs"/"rr": verifica la firma con la clave fijada y deriva la clave AES-256-GCM.
+async function espDerive(r, nonce, ecdh) {
+  if (!r || !r.ok || !r.e || !r.s) throw new Error(r?.msg || 'La ESP no respondió.');
+  const payload = `PCU-ESP-SESSION|${nonce}|${ecdh.pubB64}|${r.e}|${r.exp}`;
+  if (!(await verifySig(cfg.espKey, payload, r.s))) throw new Error('La respuesta no está firmada por tu ESP.');
+  const espPub = await crypto.subtle.importKey('raw', b64u.dec(r.e), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const z = await crypto.subtle.deriveBits({ name: 'ECDH', public: espPub }, ecdh.priv, 256);
+  const ikm = await crypto.subtle.importKey('raw', z, 'HKDF', false, ['deriveKey']);
+  const te = new TextEncoder();
+  const key = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: te.encode(nonce), info: te.encode('PCU-ESP-SESSION') },
+    ikm, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  return { key, seq: 0, exp: r.exp, pc: !!r.pc, q: Promise.resolve() };
+}
+
+// Manda la orden firmada a la ESP y arma la sesión (o tira un error).
+async function espOpen(signed, ecdh) {
+  if (!(await waitConnected(8000))) throw new Error('No hay conexión con el servidor MQTT.');
+  client.publish(topics().cmd, JSON.stringify(signed.msg), { qos: 1 });
+  const r = await waitResponse(signed.nonce, 15000);
+  return espDerive(r, signed.nonce, ecdh);
+}
+
+// Mensaje de entrada cifrado para la ESP: seq (u32 LE) || AES-256-GCM(texto || tag), IV = "PCUI" || seq || 0000.
+function espSend(bytes) {
+  const E = R.esp;
+  const seq = ++E.seq;
+  E.q = E.q.then(async () => {
+    const iv = new Uint8Array(12);
+    iv.set([0x50, 0x43, 0x55, 0x49]);
+    new DataView(iv.buffer).setUint32(4, seq, true);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, E.key, bytes));
+    const out = new Uint8Array(4 + ct.length);
+    new DataView(out.buffer).setUint32(0, seq, true);
+    out.set(ct, 4);
+    if (client?.connected) client.publish(topics().in, out, { qos: 0 });
+  }).catch(() => {});
+}
+
+const espActive = () => !!(R.esp && R.esp.exp > Date.now() / 1000);
+// ¿Esta entrada va por el host (DataChannel)? Si la compu está bloqueada, va por la ESP (teclado Bluetooth de verdad).
+const viaHost = () => !!(R.live && R.live.connected && R.live.inp.readyState === 'open' && !(R.locked && espActive()));
 
 // ------------------------------------------------------------ Ajustes: emparejar la compu
 
@@ -136,6 +227,7 @@ function showRemote() {
   R.visible = true;
   refreshRemoteOverlay();
   prepareOffer();
+  prepareEcdh().then(refreshRemoteOverlay).catch(() => {});
   clearInterval(R.tickTimer);
   R.tickTimer = setInterval(tick, 1000);
 }
@@ -144,6 +236,7 @@ function leaveRemote() {
   if (!R.visible) return;
   R.visible = false;
   endLive('salir');
+  if (R.esp) { releaseAllLocal(); R.esp = null; }
   discardPrepared();
   clearInterval(R.tickTimer);
   clearTimeout(R.refreshTimer);
@@ -162,11 +255,21 @@ function setOverlay(text, { connect = false, unlock = false, busy = false } = {}
 
 function refreshRemoteOverlay() {
   if (!R.visible || R.live) return;
-  if (!hostPaired()) return setOverlay('Primero emparejá la compu en Ajustes → Compu (pantalla remota).');
-  if (hostKeyChanged()) return setOverlay('La compu se presenta con otra clave. Revisalo en Ajustes antes de conectar.');
-  if (!hostOnline()) return setOverlay('El programa de la compu no está conectado. ¿Está prendida y con la sesión de Windows iniciada?', { unlock: true });
-  if (!R.prepared) return setOverlay('Preparando la conexión…', { connect: true, busy: true });
-  setOverlay(hostState.locked ? 'La compu está bloqueada: podés conectarte igual, pero Windows no deja ver la pantalla de bloqueo.' : 'Listo para conectar.',
+  const say = (t, o) => setOverlay((R.notice ? R.notice + ' ' : '') + t, o);
+  const espReady = espUsable() && !!R.ecdh;
+  const espNote = espActive() ? ' Teclado, touchpad y multimedia siguen andando por la ESP (Bluetooth).' : '';
+  $('#rConnect').textContent = hostUsable() ? 'Conectar con Face ID' : 'Conectar teclado y mouse (ESP) con Face ID';
+  if (hostKeyChanged()) return say('La compu se presenta con otra clave. Revisalo en Ajustes antes de conectar.');
+  if (espKeyChanged() && !hostUsable()) return say('La ESP se presenta con otra clave. Revisalo en Ajustes antes de conectar.');
+  if (!hostPaired() && !espPaired()) return say('Primero emparejá la compu (o la ESP) en Ajustes.');
+  if (!hostUsable()) {
+    const why = !hostPaired() ? 'La compu no está emparejada para ver la pantalla.' : 'El programa de la compu no está conectado (¿bloqueada, recién prendida o cerrado?).';
+    if (espActive()) return say(`Sin video. ${why}${espNote}`, { unlock: true });
+    if (espReady) return say(`${why} Podés manejarla sin video por la ESP (teclado y mouse Bluetooth).`, { connect: true, unlock: true });
+    return say(why + (espPaired() && !espOnline() ? ' La ESP tampoco está conectada.' : ''), { unlock: true });
+  }
+  if (!R.prepared) return say('Preparando la conexión…', { connect: true, busy: true });
+  say((hostState.locked ? 'La compu está bloqueada: podés conectarte igual, pero Windows no deja ver la pantalla de bloqueo.' : 'Listo para conectar.') + espNote,
     { connect: true, unlock: !!hostState.locked });
 }
 
@@ -216,22 +319,51 @@ function discardPrepared() {
   R.prepared = null;
 }
 
+// Un solo Face ID abre la sesión con el host (video + entrada) y, si está emparejada, con la ESP (respaldo).
 async function connectRemote() {
-  const p = R.prepared;
-  if (!p || R.live) return;
-  R.prepared = null;
-  clearTimeout(R.refreshTimer);
+  const p = hostUsable() ? R.prepared : null;
+  const ecdh = espUsable() && !espActive() ? R.ecdh : null;
+  if ((!p && !ecdh) || R.live) return;
+  R.notice = null;
+  if (p) { R.prepared = null; clearTimeout(R.refreshTimer); }
+  if (ecdh) R.ecdh = null;
+  const extra = {};
+  if (p) Object.assign(extra, { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality });
+  if (ecdh) extra.e = ecdh.pubB64;
   let signed;
   try {
-    // Lo primero tras el toque: Face ID. El challenge ata la sesión a ESTA oferta (fingerprint DTLS) y a ESTA compu.
-    signed = await signCommand('rs', { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality });
+    // Lo primero tras el toque: Face ID. El challenge ata la sesión a ESTA oferta (fingerprint DTLS), a ESTA compu
+    // y a la clave efímera de la app para la ESP.
+    signed = await signCommand('rs', extra);
   } catch (e) {
-    p.pc.close();
+    if (p) p.pc.close();
     setOverlay(e?.name === 'NotAllowedError' ? 'Cancelado.' : 'Error de Face ID: ' + e.message);
     prepareOffer();
+    prepareEcdh().then(refreshRemoteOverlay).catch(() => {});
     return;
   }
   setOverlay('Conectando…', { connect: true, busy: true });
+  const espP = ecdh ? espOpen(signed, ecdh) : null;
+  const hostP = p ? openHost(p, signed) : null;
+  let espErr = null, hostErr = null;
+  if (espP) {
+    try { R.esp = await espP; if (!R.esp.pc) espErr = 'La ESP no está conectada por Bluetooth a la compu.'; }
+    catch (e) { espErr = e.message; }
+  }
+  if (hostP) { try { await hostP; } catch (e) { hostErr = e.message; } }
+  prepareEcdh().catch(() => {});
+  if (hostErr || !p) {
+    if (p) prepareOffer();
+    R.notice = [hostErr, espErr].filter(Boolean).join(' ') || null;
+    if (espActive()) setStatus('Por la ESP · sin video');
+    refreshRemoteOverlay();
+    tick();
+  } else if (espErr) {
+    setStatus('Conectado (sin respaldo por la ESP: ' + espErr + ')');
+  }
+}
+
+async function openHost(p, signed) {
   try {
     if (!(await waitConnected(8000))) throw new Error('No hay conexión con el servidor MQTT.');
     client.publish(topics().hostIn, JSON.stringify({ type: 'open', sdp: p.sdp, ice: iceServers(), ...signed.msg }), { qos: 1 });
@@ -247,8 +379,7 @@ async function connectRemote() {
   } catch (e) {
     p.pc.close();
     R.live = null;
-    setOverlay(e.message);
-    prepareOffer();
+    throw e;
   }
 }
 
@@ -311,17 +442,22 @@ function endLive(why, fromHost = false) {
   $('#rStats').textContent = '';
   $('#rSession').hidden = true;
   setLocked(false);
-  setStatus('');
+  setStatus(espActive() ? 'Por la ESP · sin video' : '');
   if (R.visible) {
-    setOverlay(why === 'salir' ? '' : why);
+    R.notice = why === 'salir' ? null : why;
+    refreshRemoteOverlay();
     prepareOffer();
   }
+  tick();
 }
 
 function setStatus(t) { $('#rStatus').textContent = t; }
 
 function setLocked(v) {
+  if (v !== R.locked && (R.held.size || R.buttons)) releaseAllLocal(); // cambia el camino de la entrada
+  R.locked = v;
   $('#rLocked').hidden = !v || !R.live;
+  $('#rLockEsp').hidden = !espActive();
 }
 
 function fillMonitors(list, current) {
@@ -339,22 +475,50 @@ function fillMonitors(list, current) {
 
 function tick() {
   const L = R.live;
-  if (!L || !L.exp) { $('#rSession').hidden = true; return; }
-  const left = L.exp - Math.floor(Date.now() / 1000);
+  const exp = L?.exp || (R.esp ? R.esp.exp : 0);
+  if (!exp) { $('#rSession').hidden = true; return; }
+  const left = exp - Math.floor(Date.now() / 1000);
+  if (!L && left <= 0) {
+    R.esp = null;
+    $('#rSession').hidden = true;
+    setStatus('');
+    R.notice = 'Pasó la hora: volvé a conectar con Face ID.';
+    refreshRemoteOverlay();
+    return;
+  }
   $('#rSession').hidden = false;
   $('#rLeft').textContent = left > 60 ? `${Math.ceil(left / 60)} min` : `${Math.max(0, left)} s`;
-  $('#rRenew').hidden = left > RENEW_BEFORE || !!L.renewing;
+  $('#rRenew').hidden = left > RENEW_BEFORE || !!L?.renewing || !!R.renewing;
 }
 
 async function renewSession() {
   const L = R.live;
-  if (!L) return;
+  const ecdh = espUsable() ? R.ecdh : null; // la sesión con la ESP se renueva con una clave efímera nueva
+  if (!L && !(espActive() && ecdh)) return;
+  if (ecdh) R.ecdh = null;
+  const extra = {};
+  if (L) Object.assign(extra, { f: L.fo, h: cfg.hostId });
+  if (ecdh) extra.e = ecdh.pubB64;
   let signed;
   try {
-    signed = await signCommand('rr', { f: L.fo, h: cfg.hostId }); // Face ID primero
-  } catch (e) { setStatus(e?.name === 'NotAllowedError' ? 'Cancelado.' : e.message); return; }
-  L.renewing = signed.nonce;
-  L.ctl.send(JSON.stringify({ t: 'renew', ...signed.msg }));
+    signed = await signCommand('rr', extra); // Face ID primero
+  } catch (e) {
+    setStatus(e?.name === 'NotAllowedError' ? 'Cancelado.' : e.message);
+    prepareEcdh().catch(() => {});
+    return;
+  }
+  if (L) { L.renewing = signed.nonce; L.ctl.send(JSON.stringify({ t: 'renew', ...signed.msg })); }
+  if (ecdh) {
+    R.renewing = true;
+    tick();
+    try {
+      const E = await espOpen(signed, ecdh);
+      releaseAllLocal();
+      R.esp = E;
+    } catch (e) { setStatus('ESP: ' + e.message); }
+    R.renewing = false;
+    prepareEcdh().catch(() => {});
+  }
   tick();
 }
 
@@ -374,10 +538,9 @@ const enc = {
 const clamp16 = (x) => Math.max(-32768, Math.min(32767, Math.round(x)));
 
 function sendInput(bytes) {
-  const L = R.live;
-  if (!L || L.inp.readyState !== 'open') return false;
-  L.inp.send(bytes);
-  return true;
+  if (viaHost()) { R.live.inp.send(bytes); return true; }
+  if (espActive()) { espSend(bytes); return true; }
+  return false;
 }
 
 function keyEvent(u, down) {
@@ -409,7 +572,11 @@ function flushPad() {
   const v = Math.trunc(pad.wheel.v), h = Math.trunc(pad.wheel.h);
   if (v || h) { sendInput(enc.wheel(v, h)); pad.wheel.v -= v; pad.wheel.h -= h; }
 }
-const schedulePad = () => { if (!pad.raf) pad.raf = requestAnimationFrame(flushPad); };
+// Por la ESP: ~25 mensajes por segundo (cada uno viaja por MQTT y Bluetooth).
+const schedulePad = () => {
+  if (pad.raf) return;
+  pad.raf = viaHost() ? requestAnimationFrame(flushPad) : setTimeout(flushPad, 40);
+};
 
 function setupPad() {
   const el = $('#pad');
@@ -442,7 +609,8 @@ function setupPad() {
       if (p.moved > 8) pad.tap = null;
       // Aceleración: lento = preciso, rápido = cruza la pantalla.
       const v = Math.hypot(dx, dy) / dt; // px/ms
-      const gain = (cfg.ptrSpeed || 1) * (1.3 + Math.min(v, 3) * 1.8);
+      // por la ESP es un mouse Bluetooth y Windows le suma su propia aceleración
+      const gain = (cfg.ptrSpeed || 1) * (1.3 + Math.min(v, 3) * 1.8) * (viaHost() ? 1 : 0.6);
       pad.acc.x += dx * gain; pad.acc.y += dy * gain;
       schedulePad();
     } else if (pad.pts.size === 2) {
@@ -533,7 +701,8 @@ function setupKey(el, k) {
     keyEvent(k.u, true);
     if (isShift) document.body.classList.add('shift-on');
     // Repetición al mantener (Windows no repite las teclas de SendInput)
-    if (!k.mod) repeat = setTimeout(function rep() { if (pid !== null) { sendInput(enc.key(k.u, true)); repeat = setTimeout(rep, 40); } }, 450);
+    // (por la ESP no hace falta: Windows repite solo las teclas de un teclado Bluetooth)
+    if (!k.mod) repeat = setTimeout(function rep() { if (pid !== null && viaHost()) { sendInput(enc.key(k.u, true)); repeat = setTimeout(rep, 40); } }, 450);
   };
   const up = (e) => {
     if (e.pointerId !== pid) return;
@@ -705,6 +874,24 @@ function setupRemote() {
     if (!confirm('¿Olvidar esta compu? Para volver a usar la pantalla remota vas a tener que comparar el código otra vez.')) return;
     delete cfg.hostKey; delete cfg.hostId; saveCfg(); refreshHostSettings();
   });
+  $('#btnEspMatch').addEventListener('click', () => {
+    const k = $('#espCodeBox').dataset.key;
+    if (!k) return;
+    cfg.espKey = k;
+    saveCfg();
+    refreshEspSettings();
+  });
+  $('#btnEspNoMatch').addEventListener('click', () => {
+    $('#espCodeBox').hidden = true;
+    $('#espPairState').textContent = 'No se emparejó. Si el código no coincide, no la uses como respaldo y revisá la ESP.';
+    $('#espPairState').className = 'hint err';
+  });
+  $('#btnEspForget').addEventListener('click', () => {
+    if (!confirm('¿Olvidar esta ESP como teclado/mouse de respaldo?')) return;
+    delete cfg.espKey;
+    saveCfg();
+    refreshEspSettings();
+  });
   $('#turnUrl').value = cfg.turnUrl || '';
   $('#turnUser').value = cfg.turnUser || '';
   $('#turnPass').value = cfg.turnPass || '';
@@ -729,6 +916,6 @@ function setupRemote() {
 // ------------------------------------------------------------ inicio
 
 setupRemote();
-Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc });
+Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc, viaHost, espActive });
 if (!cfg.credId || !cfg.host) showSettings();
 connect();

@@ -38,6 +38,7 @@ const b64u = {
 };
 const topics = () => ({
   cmd: `pcu/${cfg.topic}/cmd`,
+  in: `pcu/${cfg.topic}/in`, // entrada remota cifrada para la ESP (respaldo sin host)
   resp: `pcu/${cfg.topic}/resp`,
   state: `pcu/${cfg.topic}/state`,
   hostState: `pcu/${cfg.topic}/host/state`, // programa PC Unlock Host en la compu
@@ -179,7 +180,7 @@ function connect() {
   client.on('message', (topic, buf) => {
     let m;
     try { m = JSON.parse(buf.toString()); } catch { return; }
-    if (topic === topics().state) renderState(m);
+    if (topic === topics().state) { renderState(m); onEspState(m); } // onEspState: remote.js
     else if (topic === topics().resp && waiting.has(m.n)) { waiting.get(m.n)(m); waiting.delete(m.n); }
     else if (topic === topics().hostState || topic === topics().hostOut) onHostMessage(topic, m); // remote.js
   });
@@ -286,6 +287,7 @@ function refreshSettings() {
   }
   $('#pairCode').value = pairCode();
   refreshHostSettings(); // remote.js
+  refreshEspSettings();
 }
 
 function showSettings() {

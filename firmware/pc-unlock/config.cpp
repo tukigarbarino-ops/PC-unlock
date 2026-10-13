@@ -1,5 +1,7 @@
 #include "config.h"
 #include <Preferences.h>
+#include <esp_system.h>
+#include "session.h"
 
 Config cfg;
 static Preferences prefs;
@@ -56,6 +58,23 @@ void configErase() {
   prefs.clear();
   prefs.end();
   cfg = Config();
+}
+
+static int hwRng(void*, unsigned char* out, size_t len) {
+  esp_fill_random(out, len);
+  return 0;
+}
+
+void identityEnsure() {
+  prefs.begin("pcu", false);
+  bool ok = prefs.getBytes("ik", cfg.idPriv, 32) == 32 && sess::identityPublic(cfg.idPriv, cfg.idPub, hwRng, nullptr);
+  if (!ok) {
+    ok = sess::identityGenerate(cfg.idPriv, hwRng, nullptr) && sess::identityPublic(cfg.idPriv, cfg.idPub, hwRng, nullptr);
+    if (ok) prefs.putBytes("ik", cfg.idPriv, 32);
+    Serial.println(ok ? "[id] clave de identidad nueva" : "[id] ERROR generando la clave de identidad");
+  }
+  prefs.end();
+  cfg.hasId = ok;
 }
 
 void setSetupFlag(bool on) {

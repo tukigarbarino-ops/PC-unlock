@@ -180,3 +180,22 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
 - Ideas anotadas para más adelante (ESP sin hardware extra): suspender, macros, presentaciones, apagado programado,
   horarios, monitor de cortes de internet, escáner WiFi, avisos por ntfy, BOOT corto como botón, sensor táctil.
   Con hardware barato: optoacoplador al botón de power (forzar apagado/reinicio), IR (aire/TV), DHT22/BME280, WS2812.
+
+## Respaldo por la ESP (fase 2, firmware 1.3.0 — compilado y probado en PC, FALTA cargarlo y medir en la ESP)
+- Report map nuevo: ID 3 mouse (3 botones, X, Y, rueda, AC Pan; 5 B) e ID 4 Consumer Control (u16).
+  **Hay que volver a emparejar el Bluetooth en Windows** (quitar "PC Unlock" y agregarlo en modo configuración).
+- Identidad de la ESP: P-256 en NVS (`ik`), se crea sola después de `kbBegin` (RNG por hardware). Código de
+  verificación (`PCU-ID|esp|`) en el portal; clave pública en `state.k` (+ `state.in=1`). "Borrar todo" la regenera.
+- Sesión: challenge `rs`/`rr` con `e` = clave ECDH efímera de la app (WebCrypto, no extraíble, se crea antes del toque).
+  La ESP hace ECDH + HKDF-SHA256 (salt = nonce, info `PCU-ESP-SESSION`) → AES-256-GCM, y responde en `resp`
+  `{n,c,ok,pc,e,s,exp}` con `s` = firma de su identidad sobre `PCU-ESP-SESSION|n|appE|espE|exp`. 1 hora.
+- Entrada: `pcu/<t>/in` (QoS 0) = seq u32 LE || GCM(protocolo binario || tag), IV `PCUI`||seq||0000; seq creciente.
+  Se descifra en el callback de MQTT y va directo a `kbInput()`; suelta todo a los 2 s sin mensajes.
+- App: un Face ID abre host + ESP; la entrada va por el host salvo que no esté o la compu esté bloqueada (ahí la ESP,
+  que sí llega a la pantalla de bloqueo). Por la ESP: mouse a ~25 Hz y ×0,6, sin repetición de teclas en la app.
+- Benchmark: mandar `b` por el monitor serie (115200) → tiempos de ECDSA, ECDH, GCM, HMAC y heap.
+- Pruebas: `firmware/test/session_test.cpp` + `session_interop.mjs` (C++ vs WebCrypto, en CI);
+  `tools/e2e/esp.e2e.js` (ESP falsa con session_test real; `E2E_SESSION_BIN=<ruta>`). En esta PC se compila con
+  `python -m ziglang c++` + mbedtls 2.28.8 (no hay g++).
+- arduino-cli: el del Arduino IDE (`%LOCALAPPDATA%\Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe`)
+  con `--config-file ~/.arduinoIDE/arduino-cli.yaml`. v1.3.0: flash 39 %, RAM estática 17 %. ESP en COM4.

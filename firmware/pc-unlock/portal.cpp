@@ -1,4 +1,5 @@
 #include "portal.h"
+#include "session.h"
 #include "config.h"
 #include <WiFi.h>
 #include <WebServer.h>
@@ -41,6 +42,7 @@ button{width:100%;padding:13px;border:0;border-radius:12px;font:600 16px system-
 button.sec{background:#262a33;color:#e8eaed}button.danger{background:#5a1f24;color:#ffb4b4}
 .ok{color:#7ee2a8}.bad{color:#ffb4b4}.hint{font-size:12px;color:#9aa0a6;margin-top:6px}.msg{padding:12px;border-radius:12px;background:#1d2a1f;color:#7ee2a8;margin:12px 0}
 .err{background:#2a1d1d;color:#ffb4b4}
+.vcode{font:600 22px ui-monospace,monospace;letter-spacing:1px;text-align:center;padding:12px;background:#0f1115;border-radius:10px;margin-top:8px}
 )CSS";
 
 static void sendPage(const String& msg = "", bool isErr = false) {
@@ -115,6 +117,11 @@ static void sendPage(const String& msg = "", bool isErr = false) {
   h += F(" · <b>Mientras esta página está abierta se pueden emparejar dispositivos nuevos.</b>");
   h += F("</div></div><button>Guardar y reiniciar</button></form>"
          "<form method=post action=/reboot><button class=sec>Salir sin cambios</button></form>"
+         "<div class=card><h2>Código de verificación de esta ESP</h2>"
+         "<div class=hint>Para el teclado y mouse remotos por la ESP. En la app: ⚙ → 5. ESP (teclado y mouse de respaldo): "
+         "tiene que aparecer exactamente este código; si coincide, tocá <b>Coinciden</b>.</div><div class=vcode>");
+  h += cfg.hasId ? sess::verificationCode(cfg.idPub).c_str() : "—";
+  h += F("</div></div>"
          "<div class=card><h2>Bluetooth</h2><div class=hint>Si cambiaste de compu o Windows no la reconoce, borrá los emparejamientos y volvé a agregar \"PC Unlock\" desde Windows.</div>"
          "<form method=post action=/forgetbt><button class=sec>Borrar emparejamientos Bluetooth</button></form></div>"
          "<div class=card><h2>Borrar todo</h2><form method=post action=/reset onsubmit=\"return confirm('¿Borrar toda la configuración?')\">"

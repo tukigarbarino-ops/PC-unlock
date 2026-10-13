@@ -154,6 +154,7 @@ std::string verifyAssertion(const Key& key, const std::string& adB64, const std:
   out.cmd = c;
   out.nonce = n;
   out.t = cmd["t"].as<int64_t>();
+  if (const char* e = cmd["e"]) out.e = e;
   if (out.nonce.size() < 8 || out.nonce.size() > 64) return "Nonce inválido";
 
   // 2) authenticatorData: rpIdHash(32) | flags(1) | signCount(4)
