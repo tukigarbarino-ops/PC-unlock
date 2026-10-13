@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instalar PC Unlock</title>
+  <meta name="description" content="Cargá el programa de PC Unlock en la ESP32 desde el navegador.">
+  <link rel="icon" href="../favicon.png">
+  <link rel="stylesheet" href="../style.css">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+  <style>
+    ol { padding-left: 20px; margin: 8px 0 0; }
+    li { margin: 8px 0; }
+    esp-web-install-button { display: block; margin-top: 12px; }
+    .bigbtn { width: 100%; padding: 16px; border: 0; border-radius: 14px; background: var(--accent); color: #fff; font: 600 17px system-ui; }
+    code { background: #0f1115; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="top"><div><h1>Instalar en la ESP32</h1><div class="conn">Versión <span id="ver">…</span></div></div></header>
+
+    <div class="card">
+      <h2><span class="num">1</span> Conectá la ESP</h2>
+      <ol>
+        <li>Abrí esta página en la <b>compu</b> con <b>Chrome</b> o <b>Edge</b>.</li>
+        <li>Enchufá la ESP32 con un cable USB que pase datos.</li>
+        <li>Si al tocar Instalar no aparece ningún puerto, instalá el driver del chip USB de tu placa
+          (<a class="link" style="display:inline" href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP210x</a> o
+          <a class="link" style="display:inline" href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340</a>).</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">2</span> Instalá</h2>
+      <p class="hint">Elegí el puerto (COM…) y confirmá. Si se queda en “Connecting…”, mantené apretado el botón <b>BOOT</b> de la placa hasta que empiece.</p>
+      <esp-web-install-button manifest="firmware/manifest.json">
+        <button slot="activate" class="bigbtn">Instalar</button>
+        <span slot="unsupported"><p class="hint err">Este navegador no puede conectarse a la ESP. Usá Chrome o Edge en la compu.</p></span>
+        <span slot="not-allowed"><p class="hint err">Hace falta abrir la página por HTTPS.</p></span>
+      </esp-web-install-button>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">3</span> Configurá desde el celu</h2>
+      <ol>
+        <li>En la app, en Configuración, copiá el <b>código para la ESP</b>.</li>
+        <li>En el iPhone: Ajustes → WiFi → <b>PC-Unlock-XXXX</b> (clave <code>pcunlock</code>).</li>
+        <li>Se abre la página de la ESP (si no, entrá a <code>http://192.168.4.1</code>). Pegá el código y cargá tu WiFi, la MAC y el PIN.</li>
+        <li>En Windows: Configuración → Bluetooth → Agregar dispositivo → <b>PC Unlock</b>.</li>
+      </ol>
+      <p class="hint">Para volver a este modo más adelante: mantené apretado <b>BOOT</b> 3 segundos con la ESP andando.</p>
+    </div>
+
+    <a class="link" href="../">← Volver a la app</a>
+  </main>
+  <script>
+    fetch('firmware/manifest.json').then(r => r.json()).then(m => (document.getElementById('ver').textContent = m.version)).catch(() => {});
+  </script>
+</body>
+</html>

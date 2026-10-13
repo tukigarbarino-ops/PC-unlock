@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PC Unlock</title>
+  <meta name="description" content="Prendé, desbloqueá y bloqueá tu compu con Face ID.">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PC Unlock">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css?v=1.1">
+</head>
+<body>
+  <main id="app">
+    <header class="top">
+      <div>
+        <h1>PC Unlock</h1>
+        <div id="conn" class="conn">Sin configurar</div>
+      </div>
+      <button id="btnSettings" class="icon-btn" aria-label="Configuración">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+      </button>
+    </header>
+
+    <!-- Pantalla principal -->
+    <section id="home">
+      <div class="status card">
+        <div class="pc-visual" id="pcVisual" data-state="unknown">
+          <svg viewBox="0 0 64 48" aria-hidden="true"><rect x="4" y="4" width="56" height="34" rx="4" class="screen"/><rect x="26" y="40" width="12" height="4" rx="1" class="stand"/></svg>
+        </div>
+        <div class="status-text">
+          <div id="pcState" class="pc-state">—</div>
+          <div id="espState" class="esp-state">Conectando…</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="action wake" data-cmd="wake">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <span>Prender</span>
+        </button>
+        <button class="action shutdown" data-cmd="shutdown" data-confirm="¿Apagar? Tocá de nuevo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <span>Apagar</span>
+        </button>
+        <button class="action unlock" data-cmd="unlock">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V8a4 4 0 0 1 7.7-1.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          <span>Desbloquear</span>
+        </button>
+        <button class="action lock" data-cmd="lock">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>
+          <span>Bloquear</span>
+        </button>
+      </div>
+
+      <div id="result" class="result" hidden></div>
+    </section>
+
+    <!-- Configuración -->
+    <section id="settings" hidden>
+      <div id="standaloneHint" class="card warn" hidden>
+        <b>Primero agregala a la pantalla de inicio.</b><br>
+        En Safari: botón <b>Compartir</b> → <b>Agregar a inicio</b>. Después abrila desde el ícono y hacé la configuración ahí
+        (Safari y la app guardan los datos por separado).
+      </div>
+
+      <div class="card">
+        <h2><span class="num">1</span> Servidor MQTT</h2>
+        <p class="hint">Los datos de tu cluster de EMQX (Access Control → Authentication).</p>
+        <label for="mqHost">Dirección</label>
+        <input id="mqHost" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="xxxxxxx.ala.us-east-1.emqxsl.com">
+        <label for="mqUser">Usuario</label>
+        <input id="mqUser" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <label for="mqPass">Contraseña</label>
+        <input id="mqPass" type="password">
+        <button id="btnSaveMqtt" class="secondary">Guardar y probar</button>
+        <div id="mqttMsg" class="hint"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">2</span> Llave con Face ID</h2>
+        <p class="hint">Crea una passkey en este iPhone. Solo se puede usar pasando Face ID, y con ella se firma cada orden.</p>
+        <div id="keyState" class="hint"></div>
+        <button id="btnCreateKey">Crear llave con Face ID</button>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">3</span> Código para la ESP</h2>
+        <p class="hint">Copialo, conectate al WiFi <b>PC-Unlock-XXXX</b> (clave <b>pcunlock</b>) y pegalo en la página que se abre.</p>
+        <textarea id="pairCode" readonly placeholder="Primero completá los pasos 1 y 2"></textarea>
+        <button id="btnCopy" class="secondary">Copiar código</button>
+      </div>
+
+      <div class="card">
+        <h2>Otros</h2>
+        <a class="link" href="instalar/">Instalar o actualizar el programa de la ESP →</a>
+        <button id="btnReset" class="danger">Borrar configuración de esta app</button>
+      </div>
+
+      <button id="btnBack" class="secondary">Volver</button>
+    </section>
+  </main>
+
+  <script src="vendor/mqtt-5.15.2.min.js"></script>
+  <script src="app.js?v=1.1"></script>
+</body>
+</html>

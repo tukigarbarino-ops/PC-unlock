@@ -1,0 +1,11 @@
+{
+  "name": "PC Unlock",
+  "version": "1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [{ "path": "pc-unlock-merged.bin", "offset": 0 }]
+    }
+  ]
+}

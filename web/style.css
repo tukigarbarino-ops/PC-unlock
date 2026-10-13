@@ -1,0 +1,83 @@
+:root {
+  --bg: #0f1115;
+  --card: #171a21;
+  --line: #262a33;
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #5b7cfa;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  min-height: 100vh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+main { max-width: 480px; margin: 0 auto; padding: 16px 16px 32px; }
+[hidden] { display: none !important; }
+
+.top { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 18px; }
+h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+.num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; }
+.conn { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.conn::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.conn.on::before { background: var(--ok); }
+.conn.off::before { background: var(--bad); }
+
+.icon-btn { background: var(--card); border: 1px solid var(--line); color: var(--text); width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; padding: 0; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+.card.warn { border-color: #5c4a14; background: #1f1b10; color: #fde68a; font-size: 14px; }
+
+.status { display: flex; align-items: center; gap: 16px; }
+.pc-visual svg { width: 64px; height: 48px; display: block; }
+.pc-visual .screen { fill: #1f232c; stroke: #3a3f4b; stroke-width: 2; transition: fill .3s, stroke .3s; }
+.pc-visual .stand { fill: #3a3f4b; }
+.pc-visual[data-state="on"] .screen { fill: #1d2b55; stroke: var(--accent); }
+.pc-state { font-size: 20px; font-weight: 600; }
+.esp-state { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.action {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 128px; border-radius: 22px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font: 600 17px system-ui; padding: 16px; transition: transform .08s, opacity .2s;
+}
+.action svg { width: 34px; height: 34px; }
+.action:active { transform: scale(0.97); }
+.action { min-height: 140px; }
+.action.unlock { background: var(--accent); border-color: var(--accent); color: #fff; }
+.action.wake svg { color: var(--ok); }
+.action.lock svg { color: var(--warn); }
+.action.shutdown svg { color: var(--bad); }
+.action.armed { border-color: var(--bad); background: #2a1416; color: #fecaca; }
+.action.armed span { font-size: 14px; }
+.action[disabled] { opacity: .5; }
+.action.busy { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+
+.result { margin-top: 14px; padding: 14px 16px; border-radius: 16px; font-size: 15px; background: var(--card); border: 1px solid var(--line); }
+.result.ok { border-color: #1f5133; background: #12241a; color: #bbf7d0; }
+.result.err { border-color: #5c2020; background: #241212; color: #fecaca; }
+
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 5px; }
+input, textarea {
+  width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #333845; background: var(--bg);
+  color: var(--text); font: inherit; font-size: 16px;
+}
+textarea { min-height: 96px; font: 12px/1.4 ui-monospace, SFMono-Regular, monospace; word-break: break-all; resize: vertical; }
+button { font: 600 16px system-ui; }
+.card > button, section > button {
+  width: 100%; padding: 14px; border: 0; border-radius: 14px; margin-top: 12px; background: var(--accent); color: #fff;
+}
+button.secondary { background: #262a33 !important; color: var(--text) !important; }
+button.danger { background: #3a1719 !important; color: #fecaca !important; }
+.hint { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.hint.ok { color: var(--ok); }
+.hint.err { color: var(--bad); }
+.link { display: block; color: #9fb3ff; text-decoration: none; padding: 6px 0; }

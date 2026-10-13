@@ -1,0 +1,76 @@
+name: Compilar y publicar
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar esptool
+        run: pip install esptool==5.5.0
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Instalar núcleo ESP32 2.0.17
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.17
+
+      - name: Instalar librerías (versiones fijas)
+        run: |
+          mkdir -p ~/Arduino/libraries && cd ~/Arduino/libraries
+          git clone -q --depth 1 -b 1.4.3 https://github.com/h2zero/NimBLE-Arduino.git
+          git clone -q --depth 1 -b v2.8 https://github.com/knolleary/pubsubclient.git
+          git clone -q --depth 1 -b v7.2.1 https://github.com/bblanchon/ArduinoJson.git
+
+      - name: Compilar firmware
+        run: FQBN=esp32:esp32:esp32 ./firmware/build.sh "$GITHUB_WORKSPACE/build"
+
+      - name: Prueba de verificación de firmas (en PC)
+        run: |
+          git clone -q --depth 1 -b v2.28.8 https://github.com/Mbed-TLS/mbedtls.git /tmp/mbedtls
+          make -C /tmp/mbedtls -j4 lib >/dev/null
+          g++ -std=c++17 -I/tmp/mbedtls/include -I$HOME/Arduino/libraries/ArduinoJson/src \
+            firmware/test/verify_test.cpp firmware/pc-unlock/auth.cpp /tmp/mbedtls/library/libmbedcrypto.a -o /tmp/verify_test
+          /tmp/verify_test "$(cat firmware/test/fixtures/code.txt)" firmware/test/fixtures/msgs.jsonl
+
+      - name: Armar sitio
+        run: |
+          cp -r web site
+          cp build/pc-unlock-merged.bin site/instalar/firmware/
+          VER=$(grep -oP '#define FW_VERSION "\K[^"]+' firmware/pc-unlock/config.h)
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VER\"/" site/instalar/firmware/manifest.json
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
