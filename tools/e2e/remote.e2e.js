@@ -50,7 +50,7 @@ async function main() {
 
     // ---------- host real
     const launch = (env = {}) => { const h = launchHost({ code, env: { PCU_TEST_HOOKS: '1', ...env } }); hosts.push(h); return h; };
-    host = launch({ PCU_SESSION_SECS: '45', PCU_LOG_STATS: '1' });
+    host = launch({ PCU_SESSION_SECS: '120', PCU_LOG_STATS: '1' });
     const line = await host.waitFor(/código ([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})/);
     const hostCode = line.match(/código (\S+)$/)[1];
     ok(`host arrancó (código ${hostCode})`);
@@ -106,6 +106,19 @@ async function main() {
     await page.click('[data-panel="opts"]');
     assert.equal(hint, 0);
     ok(`retardo estimado: búfer ${offRx.buffer} ms → con "Baja latencia" ${onRx.buffer} ms (total ~${offRx.total} → ~${onRx.total} ms, decodificar ${onRx.decode} ms)`);
+    // modo juego: la compu pasa a mandar 1280×720 (o 1920×1080) y vuelve a la resolución completa al apagarlo
+    const resNow = async () => ((await page.textContent('#rStats')).match(/(\d+)×(\d+)/) || [])[0];
+    await page.click('[data-panel="opts"]');
+    await page.selectOption('#rGameRes', '720');
+    await page.check('#rGame');
+    await until(async () => (await resNow()) === '1280×720', 15000, 'modo juego 720p');
+    await host.waitFor(/modo juego: 720p/);
+    await page.selectOption('#rGameRes', '1080');
+    await until(async () => (await resNow()) === '1920×1080', 15000, 'modo juego 1080p');
+    await page.uncheck('#rGame');
+    await until(async () => (await resNow()) === '2560×1440', 15000, 'resolución completa');
+    await page.click('[data-panel="opts"]');
+    ok('modo juego: la compu manda 1280×720 o 1920×1080 y al apagarlo vuelve a 2560×1440 (sin reconectar)');
 
     // ---------- touchpad
     const pad = await page.$('#pad');
@@ -372,7 +385,7 @@ async function main() {
     ok('renovación con Face ID verificada por el host y firma del host verificada por la app');
 
     // ---------- vencimiento: a la hora (acá 45 s) el host corta y la app pide Face ID de nuevo
-    await host.waitFor(/fin de sesión: venció la hora/, 60000);
+    await host.waitFor(/fin de sesión: venció la hora/, 150000);
     await until(async () => (await page.textContent('#rOvText')).includes('Pasó la hora'), 5000, 'aviso de vencimiento');
     ok('la sesión vence y la app vuelve a pedir Face ID');
 

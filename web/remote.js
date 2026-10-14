@@ -330,7 +330,7 @@ async function connectRemote() {
   if (p) { R.prepared = null; clearTimeout(R.refreshTimer); }
   if (ecdh) R.ecdh = null;
   const extra = {};
-  if (p) Object.assign(extra, { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality, r: cfg.fps || 60 });
+  if (p) Object.assign(extra, { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality, r: cfg.fps || 60, g: gameCfg() });
   if (ecdh) extra.e = ecdh.pubB64;
   let signed;
   try {
@@ -583,6 +583,7 @@ async function rxStats() {
     const frame = 1000 / Math.max(15, D.host?.fps || 30);
     D.rx.total = Math.round(frame + 8 + D.rx.rtt / 2 + D.rx.buffer + (D.rx.decode || 0) + 17);
   }
+  sendCtl({ t: 'rx', ...D.rx }); // queda en el registro de la compu (host.log) para diagnosticar
   renderDiag();
 }
 
@@ -616,6 +617,9 @@ function renderDiag() {
     x && x.buffer != null ? `búfer del iPhone ${x.buffer} ms` : '', x && x.decode != null ? `decodificar ${x.decode} ms` : '',
     `baja latencia: ${!lowLatSupported() ? 'no disponible' : lowLatOn() ? 'sí' : 'no'}`].filter(Boolean).join(' · ');
 }
+
+// Modo juego: la compu captura y manda a 720p o 1080p, priorizando los fps (cuadros más chicos = llegan antes)
+const gameCfg = () => ({ on: !!cfg.game?.on, h: cfg.game?.h === 1080 ? 1080 : 720 });
 
 // "Baja latencia": le pide al navegador que use el búfer mínimo antes de mostrar cada cuadro (si lo permite).
 // Activada por defecto: probado el 14/10 en el iPhone, sin ella el retardo era muy alto.
@@ -1160,6 +1164,16 @@ function setupRemote() {
     $('#rFpsSel').value = String(cfg.fps);
   }));
   $('#rFpsSel').value = String(cfg.fps || 60);
+  $('#rGame').checked = gameCfg().on;
+  $('#rGameRes').value = String(gameCfg().h);
+  const setGame = () => {
+    cfg.game = { on: $('#rGame').checked, h: Number($('#rGameRes').value) };
+    saveCfg();
+    sendCtl({ t: 'game', ...gameCfg() });
+    D.last = null; // las cifras del diagnóstico arrancan de nuevo con la configuración nueva
+  };
+  $('#rGame').addEventListener('change', setGame);
+  $('#rGameRes').addEventListener('change', setGame);
   $('#rLowLat').checked = lowLatOn();
   if (!lowLatSupported()) { $('#rLowLat').disabled = true; $('#rLowLatNote').textContent = '(este navegador no lo permite)'; }
   $('#rLowLat').addEventListener('change', (e) => { cfg.lowLat = e.target.checked; saveCfg(); applyLowLatency(); D.last = null; });

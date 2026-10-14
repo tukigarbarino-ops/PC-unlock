@@ -106,6 +106,9 @@ iPhone (vista "Remoto")
   (github.com/nefarius/ViGEmBus → Releases; si usás DS4Windows o HidHide probablemente ya lo tenés). Solo con el
   programa de la compu (no por la ESP). Si se corta la conexión, el control vuelve a reposo a los 2 s.
   "✕ 🎮" lo cierra y desenchufa el control virtual. Las palancas llegan al tope con poco recorrido del dedo.
+- **Modo juego (⚙):** la compu captura y manda a **720p o 1080p** en vez de la resolución completa, priorizando los fps.
+  Los cuadros pesan mucho menos, así que llegan antes al iPhone: es lo que más baja el retardo en juegos y emuladores.
+  Se prende y apaga sin reconectar.
 - **Baja latencia (⚙, activada por defecto):** le pide al iPhone mostrar cada cuadro apenas llega, sin acumular
   búfer. En el iPhone es lo que hace la diferencia en juegos. Si con una red mala la imagen da saltos, se puede apagar.
 - **Diagnóstico (⚙ → Diagnóstico de fluidez):** dice cuántos fps manda la compu y cuántos se ven en el iPhone, y dónde

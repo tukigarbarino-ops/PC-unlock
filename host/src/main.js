@@ -45,6 +45,7 @@ let pairing = null;           // { topic, key, mqtt }
 let idPem = null, idPub = null, hostId = '';
 let mqttState = 'sin configurar';
 let locked = false;
+let testLock = null;          // solo pruebas automáticas (PCU_TEST_HOOKS): bloqueo simulado que no pisa el chequeo real
 let sess = null;              // sesión activa: { n, fo, fa, exp, timer, monitor, quality, connected, stats }
 const guard = new ReplayGuard();
 const gamepad = new Gamepad({ log: (m) => log(m) });
@@ -110,7 +111,7 @@ function connectMqtt() {
   client.on('error', (e) => { log('mqtt:', e.message); setMqttState('error: ' + e.message); });
   client.on('message', (topic, buf) => {
     if (process.env.PCU_TEST_HOOKS === '1' && topic === T().in + '/test') {
-      try { const t = JSON.parse(buf); if ('locked' in t) setLocked(!!t.locked); } catch { /* nada */ }
+      try { const t = JSON.parse(buf); if ('locked' in t) { testLock = !!t.locked; setLocked(testLock); } } catch { /* nada */ }
       return;
     }
     if (topic !== T().in || buf.length > MAX_SDP + 4096) return;
@@ -149,15 +150,15 @@ async function handleOpen(msg) {
   endSession('nueva sesión');
   const exp = Math.floor(Date.now() / 1000) + SESSION_SECS;
   sess = { n: cmd.n, fo, fa: null, exp, connected: false, monitor: cmd.m ?? cfg.get('monitor', null), quality: cmd.q === 'saver' ? 'saver' : 'auto',
-    fps: cmd.r === 60 ? 60 : 30 };
+    fps: cmd.r === 60 ? 60 : 30, game: { on: !!cmd.g?.on, h: cmd.g?.h === 1080 ? 1080 : 720 } };
   armExpiry();
   const mine = sess;
   setTimeout(() => { if (sess === mine && !sess.connected) endSession('no se pudo conectar en 30 s'); }, 30000);
-  log('sesión abierta, vence', new Date(exp * 1000).toLocaleTimeString(), `(${sess.fps} fps)`);
+  log('sesión abierta, vence', new Date(exp * 1000).toLocaleTimeString(), `(${sess.fps} fps${sess.game.on ? ', modo juego ' + sess.game.h + 'p' : ''})`);
   try {
     const src = await pickSource(sess.monitor);
     const ice = sanitizeIce(msg.ice);
-    const answer = await rtcStart({ offer: msg.sdp, ice, source: src, quality: sess.quality, fps: sess.fps });
+    const answer = await rtcStart({ offer: msg.sdp, ice, source: src, quality: sess.quality, fps: sess.fps, game: sess.game });
     const fa = sdpFingerprint(answer);
     sess.fa = fa;
     reply({ type: 'answer', n: cmd.n, sdp: answer, exp, hs: identity.sign(idPem, identity.answerPayload(cmd.n, fo, fa, exp)) });
@@ -309,6 +310,14 @@ function setupRtcIpc() {
         rtcSend('quality', sess.quality);
         break;
       case 'renew': handleRenew(m); break;
+      case 'game':
+        sess.game = { on: !!m.on, h: m.h === 1080 ? 1080 : 720 };
+        log(`modo juego: ${sess.game.on ? sess.game.h + 'p' : 'no'}`);
+        rtcSend('game', sess.game);
+        break;
+      case 'rx': // lo que mide el iPhone (para el registro)
+        fileLog('rx ' + JSON.stringify(m));
+        break;
       case 'fps':
         sess.fps = m.v === 60 ? 60 : 30;
         rtcSend('fps', sess.fps);
@@ -436,7 +445,7 @@ app.whenReady().then(() => {
   powerMonitor.on('lock-screen', () => setLocked(true));
   powerMonitor.on('unlock-screen', () => setLocked(false));
   setLocked(powerMonitor.getSystemIdleState(1) === 'locked');
-  setInterval(() => setLocked(powerMonitor.getSystemIdleState(1) === 'locked'), 5000);
+  setInterval(() => { if (testLock === null) setLocked(powerMonitor.getSystemIdleState(1) === 'locked'); }, 5000);
 
   log(`PC Unlock Host ${VERSION} — id ${hostId} — código ${identity.verificationCode(idPub, 'host')}`);
   try { const vd = injector.virtualDesktop(); log(`escritorio virtual ${vd.w}×${vd.h} en (${vd.x},${vd.y})${injector.simulate ? ' (entrada simulada)' : ''}`); }

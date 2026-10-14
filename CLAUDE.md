@@ -195,7 +195,11 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   El host 1.2.0 escribe `%APPDATA%\PC Unlock Host\host.log` (eventos + stats cada 2 s de la sesión) para diagnosticar.
   **Retardo (14/10):** el usuario confirmó que sin "Baja latencia" (`playoutDelayHint`/`jitterBufferTarget` = 0 en el
   receptor de Safari) el retardo es muy alto y con ella anda bien → queda activada por defecto (`cfg.lowLat !== false`).
-  Uso real previsto: emuladores tipo Nintendo DS. Modo juego (bajar resolución) no hizo falta.
+  Uso real previsto: emuladores tipo Nintendo DS. Diagnóstico del iPhone (14/10, escritorio a 2560×1440): latencia de red
+  6 ms, decodificar 6 ms, pero **búfer 193 ms** con Baja latencia puesta → es el tiempo en que llega cada cuadro completo
+  grande (el pacer espacia los paquetes). Por eso el **modo juego (host 1.3.0)**: captura a 720p/1080p (`captureSize` en
+  rtc.js), contentHint 'motion', `maintain-framerate`, 6–12 Mb/s; ctl `game{on,h}` y challenge `g`. El iPhone manda sus
+  cifras por ctl `rx` y el host las guarda en host.log (`rx {...}`). Pendiente: medir el búfer con el modo juego.
   Joystick: palancas más chicas (29cqh), tope al 60 % del radio, zona muerta 6 %, el botón se estira hasta 95 % del radio.
   Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,

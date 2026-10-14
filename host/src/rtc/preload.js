@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('host', {
   onSource: (cb) => ipcRenderer.on('source', (_e, s) => cb(s)),
   onQuality: (cb) => ipcRenderer.on('quality', (_e, q) => cb(q)),
   onFps: (cb) => ipcRenderer.on('fps', (_e, f) => cb(f)),
+  onGame: (cb) => ipcRenderer.on('game', (_e, g) => cb(g)),
   answer: (r) => ipcRenderer.send('answer', r),
   input: (u8) => ipcRenderer.send('rtc-input', u8),
   ctl: (m) => ipcRenderer.send('rtc-ctl', m),

@@ -4,17 +4,36 @@
 // Video H.264 (aceleración por hardware si Windows la ofrece) + DataChannels "in" (binario) y "ctl" (JSON).
 
 let pc = null, sender = null, track = null, source = null, quality = 'auto', fps = 30, ctl = null;
+// Modo juego: se captura y se manda a 720p o 1080p, priorizando los fps. Medido el 14/10 en el iPhone: a 2560×1440 casi
+// todo el retardo (~190 ms) era lo que tarda en llegar cada cuadro completo; con cuadros más chicos baja.
+let game = { on: false, h: 720 };
+
+// Tamaño de captura: completo, o escalado al alto del modo juego (sin agrandar si el monitor es más chico)
+function captureSize(src) {
+  if (!game.on || src.h <= game.h) return { w: src.w, h: src.h };
+  return { w: Math.round((src.w * game.h) / src.h / 2) * 2, h: game.h };
+}
 let lastBytes = 0, lastTs = 0, discTimer = null;
 
 async function capture(src) {
+  const size = captureSize(src);
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: src.id,
-      maxWidth: src.w, maxHeight: src.h, maxFrameRate: fps } },
+      maxWidth: size.w, maxHeight: size.h, maxFrameRate: fps } },
   });
   const t = stream.getVideoTracks()[0];
-  t.contentHint = 'detail'; // escritorio: priorizar nitidez del texto
+  t.contentHint = game.on ? 'motion' : 'detail'; // juego: priorizar fluidez; escritorio: nitidez del texto
   return t;
+}
+
+// Vuelve a abrir la captura con la configuración actual (fps, modo juego, monitor) sin renegociar
+async function recapture() {
+  const t = await capture(source);
+  await sender.replaceTrack(t);
+  if (track) track.stop();
+  track = t;
+  applyQuality();
 }
 
 // El iPhone (Safari) ofrece H.264 "Constrained Baseline" (42e0xx) y "Constrained High" (640cxx). Con Constrained Baseline,
@@ -50,13 +69,18 @@ async function applyQuality() {
   const p = sender.getParameters();
   if (!p.encodings || !p.encodings.length) return;
   const e = p.encodings[0];
+  const cw = captureSize(source).w;
   if (quality === 'saver') {
-    e.maxBitrate = 350_000; e.maxFramerate = 12; e.scaleResolutionDownBy = Math.max(1, source.w / 1280);
+    e.maxBitrate = 350_000; e.maxFramerate = 12; e.scaleResolutionDownBy = Math.max(1, cw / 1280);
+  } else if (game.on) {
+    // modo juego: la resolución ya viene chica de la captura; bitrate suficiente para movimiento a 60 fps
+    e.maxBitrate = game.h >= 1080 ? (fps === 60 ? 12_000_000 : 8_000_000) : (fps === 60 ? 6_000_000 : 4_000_000);
+    e.maxFramerate = fps; e.scaleResolutionDownBy = 1;
   } else {
     // 60 fps: más bitrate para que el movimiento no se vea borroso (igual se adapta solo si la conexión no da)
-    e.maxBitrate = fps === 60 ? 15_000_000 : 8_000_000; e.maxFramerate = fps; e.scaleResolutionDownBy = Math.max(1, source.w / 2560);
+    e.maxBitrate = fps === 60 ? 15_000_000 : 8_000_000; e.maxFramerate = fps; e.scaleResolutionDownBy = Math.max(1, cw / 2560);
   }
-  p.degradationPreference = quality === 'saver' ? 'maintain-resolution' : 'balanced';
+  p.degradationPreference = quality === 'saver' ? 'maintain-resolution' : game.on ? 'maintain-framerate' : 'balanced';
   try { await sender.setParameters(p); } catch (err) { host.log('setParameters: ' + err.message); }
 }
 
@@ -102,6 +126,7 @@ host.onStart(async (o) => {
     source = o.source;
     quality = o.quality;
     fps = o.fps === 60 ? 60 : 30;
+    if (o.game) game = { on: !!o.game.on, h: o.game.h === 1080 ? 1080 : 720 };
     track = await capture(source);
     pc = new RTCPeerConnection({ iceServers: o.ice, bundlePolicy: 'max-bundle' });
     pc.addEventListener('datachannel', (ev) => {
@@ -148,6 +173,11 @@ host.onStart(async (o) => {
 host.onCtl((m) => sendCtl(m));
 host.onQuality((q) => { quality = q; applyQuality(); });
 // Cambiar los fps vuelve a abrir la captura con el tope nuevo (sin renegociar)
+host.onGame(async (g) => {
+  game = { on: !!g.on, h: g.h === 1080 ? 1080 : 720 };
+  try { await recapture(); } catch (err) { host.log('modo juego: ' + err.message); }
+});
+
 host.onFps(async (f) => {
   fps = f === 60 ? 60 : 30;
   try {
