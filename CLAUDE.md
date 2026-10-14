@@ -181,7 +181,7 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   horarios, monitor de cortes de internet, escáner WiFi, avisos por ntfy, BOOT corto como botón, sensor táctil.
   Con hardware barato: optoacoplador al botón de power (forzar apagado/reinicio), IR (aire/TV), DHT22/BME280, WS2812.
 
-## Respaldo por la ESP (fase 2, firmware 1.3.0 — compilado y probado en PC, FALTA cargarlo y medir en la ESP)
+## Respaldo por la ESP (fase 2, firmware 1.3.0 — cargado en la ESP, Bluetooth re-emparejado)
 - Report map nuevo: ID 3 mouse (3 botones, X, Y, rueda, AC Pan; 5 B) e ID 4 Consumer Control (u16).
   **Hay que volver a emparejar el Bluetooth en Windows** (quitar "PC Unlock" y agregarlo en modo configuración).
 - Identidad de la ESP: P-256 en NVS (`ik`), se crea sola después de `kbBegin` (RNG por hardware). Código de
@@ -193,7 +193,10 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   Se descifra en el callback de MQTT y va directo a `kbInput()`; suelta todo a los 2 s sin mensajes.
 - App: un Face ID abre host + ESP; la entrada va por el host salvo que no esté o la compu esté bloqueada (ahí la ESP,
   que sí llega a la pantalla de bloqueo). Por la ESP: mouse a ~25 Hz y ×0,6, sin repetición de teclas en la app.
-- Benchmark: mandar `b` por el monitor serie (115200) → tiempos de ECDSA, ECDH, GCM, HMAC y heap.
+- Benchmark: mandar `b` por el monitor serie (115200). Medido en la WROOM-32D: verificar ECDSA 294 ms, firmar 291 ms,
+  abrir sesión (ECDH+HKDF) 566 ms → abrir una sesión cuesta ~1,2 s una vez; por mensaje AES-256-GCM descifrar+verificar
+  101 µs (cifrar 117 µs), HMAC-SHA256 249 µs. Firmar cada tecla con ECDSA (294 ms) habría dado ~3 teclas/s: descartado.
+  Heap libre 92 KB (mínimo histórico 76 KB), sin cambio después de abrir sesión.
 - Pruebas: `firmware/test/session_test.cpp` + `session_interop.mjs` (C++ vs WebCrypto, en CI);
   `tools/e2e/esp.e2e.js` (ESP falsa con session_test real; `E2E_SESSION_BIN=<ruta>`). En esta PC se compila con
   `python -m ziglang c++` + mbedtls 2.28.8 (no hay g++).
