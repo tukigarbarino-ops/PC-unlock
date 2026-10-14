@@ -94,13 +94,15 @@ async function main() {
     // retardo desglosado y "Baja latencia"
     await until(async () => /retardo ~\d+ ms/.test(await page.textContent('#rStats')), 10000, 'retardo estimado');
     await sleep(4500);
-    const offRx = await page.evaluate(() => ({ ...window.PCU.D.rx }));
     await page.click('[data-panel="opts"]');
+    assert.ok(await page.isChecked('#rLowLat'), 'Baja latencia viene activada');
+    await page.uncheck('#rLowLat');
+    await sleep(6500);
+    const offRx = await page.evaluate(() => ({ ...window.PCU.D.rx }));
     await page.check('#rLowLat');
     await sleep(6500);
     const onRx = await page.evaluate(() => ({ ...window.PCU.D.rx }));
     const hint = await page.evaluate(() => window.PCU.R.live.pc.getReceivers().find((r) => r.track.kind === 'video').playoutDelayHint);
-    await page.uncheck('#rLowLat');
     await page.click('[data-panel="opts"]');
     assert.equal(hint, 0);
     ok(`retardo estimado: búfer ${offRx.buffer} ms → con "Baja latencia" ${onRx.buffer} ms (total ~${offRx.total} → ~${onRx.total} ms, decodificar ${onRx.decode} ms)`);

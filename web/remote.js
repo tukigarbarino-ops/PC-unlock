@@ -614,10 +614,12 @@ function renderDiag() {
     x && x.jitter != null ? `jitter ${x.jitter} ms` : '', x ? `pérdida ${x.loss.toFixed(1)} %` : '', x && x.drop ? `${x.drop} cuadros descartados` : '',
     x && x.freeze ? `congelado ${x.freeze.toFixed(1)} s` : '', `límite según la compu: ${lim}`,
     x && x.buffer != null ? `búfer del iPhone ${x.buffer} ms` : '', x && x.decode != null ? `decodificar ${x.decode} ms` : '',
-    `baja latencia: ${!lowLatSupported() ? 'no disponible' : cfg.lowLat ? 'sí' : 'no'}`].filter(Boolean).join(' · ');
+    `baja latencia: ${!lowLatSupported() ? 'no disponible' : lowLatOn() ? 'sí' : 'no'}`].filter(Boolean).join(' · ');
 }
 
 // "Baja latencia": le pide al navegador que use el búfer mínimo antes de mostrar cada cuadro (si lo permite).
+// Activada por defecto: probado el 14/10 en el iPhone, sin ella el retardo era muy alto.
+const lowLatOn = () => cfg.lowLat !== false;
 const lowLatSupported = () => typeof RTCRtpReceiver !== 'undefined' &&
   ('playoutDelayHint' in RTCRtpReceiver.prototype || 'jitterBufferTarget' in RTCRtpReceiver.prototype);
 function applyLowLatency() {
@@ -626,8 +628,8 @@ function applyLowLatency() {
   for (const r of L.pc.getReceivers()) {
     if (r.track?.kind !== 'video') continue;
     try {
-      if ('playoutDelayHint' in r) r.playoutDelayHint = cfg.lowLat ? 0 : null;
-      if ('jitterBufferTarget' in r) r.jitterBufferTarget = cfg.lowLat ? 0 : null;
+      if ('playoutDelayHint' in r) r.playoutDelayHint = lowLatOn() ? 0 : null;
+      if ('jitterBufferTarget' in r) r.jitterBufferTarget = lowLatOn() ? 0 : null;
     } catch { /* el navegador no lo acepta */ }
   }
 }
@@ -1158,7 +1160,7 @@ function setupRemote() {
     $('#rFpsSel').value = String(cfg.fps);
   }));
   $('#rFpsSel').value = String(cfg.fps || 60);
-  $('#rLowLat').checked = !!cfg.lowLat;
+  $('#rLowLat').checked = lowLatOn();
   if (!lowLatSupported()) { $('#rLowLat').disabled = true; $('#rLowLatNote').textContent = '(este navegador no lo permite)'; }
   $('#rLowLat').addEventListener('change', (e) => { cfg.lowLat = e.target.checked; saveCfg(); applyLowLatency(); D.last = null; });
   $('#rFpsSel').addEventListener('change', (e) => {

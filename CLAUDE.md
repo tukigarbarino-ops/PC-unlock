@@ -193,6 +193,9 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   1440p). Fix en `host/src/rtc/rtc.js`: la oferta se negocia internamente como 4200xx y en la respuesta se restaura el
   perfil de cada payload type. `tools/e2e/encoder-probe.js` lo verifica (falla si con oferta tipo iPhone no hay hardware).
   El host 1.2.0 escribe `%APPDATA%\PC Unlock Host\host.log` (eventos + stats cada 2 s de la sesión) para diagnosticar.
+  **Retardo (14/10):** el usuario confirmó que sin "Baja latencia" (`playoutDelayHint`/`jitterBufferTarget` = 0 en el
+  receptor de Safari) el retardo es muy alto y con ella anda bien → queda activada por defecto (`cfg.lowLat !== false`).
+  Uso real previsto: emuladores tipo Nintendo DS. Modo juego (bajar resolución) no hizo falta.
   Joystick: palancas más chicas (29cqh), tope al 60 % del radio, zona muerta 6 %, el botón se estira hasta 95 % del radio.
   Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
