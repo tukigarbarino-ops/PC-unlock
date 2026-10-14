@@ -138,6 +138,24 @@ Con TURN el video pasa por ese servidor: 1 hora en modo normal son ~0,7–1,8 GB
   les mande mouse/teclado.
 - Antes de iniciar sesión en Windows el host no está corriendo.
 
+### Respaldo por la ESP (sin programa en la compu)
+Si PC Unlock Host no está (compu bloqueada, recién prendida, programa cerrado), el **teclado, el touchpad y la
+multimedia van por la ESP** como teclado/mouse Bluetooth, sin video. Si la compu está bloqueada y el host está
+conectado, la entrada pasa sola a la ESP (Windows no deja que un programa escriba en la pantalla de bloqueo, pero un
+teclado Bluetooth sí).
+- Necesita la ESP con la versión **1.3.0** o más nueva. Esa versión agrega un mouse y teclas multimedia al Bluetooth:
+  **después de actualizar hay que volver a emparejar** (Windows → Bluetooth → *PC Unlock* → Quitar dispositivo; en la
+  ESP BOOT 3 s; Windows → Agregar dispositivo → *PC Unlock*).
+- **Emparejar:** en la app *⚙ → 5. ESP* aparece un código; tiene que ser igual al de la página de configuración de la
+  ESP (BOOT 3 s → WiFi `PC-Unlock-XXXX` → *Código de verificación de esta ESP*). Si coincide, **Coinciden**.
+- **Seguridad:** el mismo Face ID que abre la sesión lleva una clave efímera de la app. La ESP responde con su propia
+  clave efímera **firmada con su clave de identidad** (la que fijaste comparando el código), y de ahí sale una clave
+  AES-256-GCM. Cada mensaje va cifrado y numerado: quien controle el broker no puede ni leer lo que tipeás ni inyectar
+  teclas. La sesión dura 1 hora y se renueva con Face ID.
+- **Costo medido en la ESP32:** abrir la sesión ~1,2 s (una vez); cada mensaje 0,1 ms. Firmar cada tecla con ECDSA
+  costaría 294 ms (unas 3 teclas por segundo), por eso no se usa.
+- Por la ESP el touchpad manda ~25 mensajes por segundo y la latencia es algo mayor (pasa por el servidor MQTT).
+
 ### Desarrollo del host
 ```
 cd host
@@ -158,4 +176,6 @@ host impostor).
 ```
 cd tools/e2e && npm install && npx playwright install chromium
 node remote.e2e.js
+E2E_SESSION_BIN=<session_test compilado> node esp.e2e.js   # respaldo por la ESP (ESP falsa con la cripto del firmware)
 ```
+`firmware/test/session_interop.mjs` prueba `session.cpp` (la cripto de la ESP) contra WebCrypto; corre en CI.
