@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.10">
+  <link rel="stylesheet" href="style.css?v=1.11">
 </head>
 <body>
   <main id="app">
@@ -155,6 +155,7 @@
               <select id="rKbSel" aria-label="Teclado"><option value="compact">compacto</option><option value="full">completo</option></select>
             </label>
             <label class="switch"><input type="checkbox" id="rSaver"> Ahorro de datos</label>
+            <label class="switch"><input type="checkbox" id="rLowLat"> Baja latencia <small id="rLowLatNote"></small></label>
           </div>
           <div class="diag">
             <b>Diagnóstico de fluidez</b>
@@ -270,7 +271,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.10"></script>
-  <script src="remote.js?v=1.10"></script>
+  <script src="app.js?v=1.11"></script>
+  <script src="remote.js?v=1.11"></script>
 </body>
 </html>

@@ -390,6 +390,7 @@ function wireLive(L) {
   L.pc.addEventListener('track', (ev) => {
     video.srcObject = ev.streams[0] || new MediaStream([ev.track]);
     video.play().catch(() => {});
+    applyLowLatency();
   });
   L.pc.addEventListener('connectionstatechange', () => {
     const st = L.pc.connectionState;
@@ -559,7 +560,8 @@ async function rxStats() {
   if (!inb) return;
   const prev = D.last;
   D.last = { t: inb.timestamp, dec: inb.framesDecoded || 0, lost: inb.packetsLost || 0, pk: inb.packetsReceived || 0,
-    drop: inb.framesDropped || 0, frz: inb.totalFreezesDuration || 0 };
+    drop: inb.framesDropped || 0, frz: inb.totalFreezesDuration || 0,
+    jbd: inb.jitterBufferDelay || 0, jbe: inb.jitterBufferEmittedCount || 0, tdt: inb.totalDecodeTime || 0 };
   if (!prev) return;
   const dt = (D.last.t - prev.t) / 1000;
   if (dt <= 0) return;
@@ -572,6 +574,15 @@ async function rxStats() {
     rtt: pair && pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null,
     jitter: inb.jitter != null ? Math.round(inb.jitter * 1000) : null,
   };
+  // Retardo: cuánto espera cada cuadro en el búfer del iPhone y cuánto tarda en decodificarse (promedio de los últimos 2 s)
+  const dJb = D.last.jbe - prev.jbe, dDec = D.last.dec - prev.dec;
+  D.rx.buffer = dJb > 0 ? Math.round(((D.last.jbd - prev.jbd) / dJb) * 1000) : null;
+  D.rx.decode = dDec > 0 ? Math.round(((D.last.tdt - prev.tdt) / dDec) * 1000) : null;
+  // Estimado de punta a punta: captura (~1 cuadro) + codificar (~8 ms) + ida por la red + búfer + decodificar + mostrar (~1 cuadro de 60 Hz)
+  if (D.rx.buffer != null && D.rx.rtt != null) {
+    const frame = 1000 / Math.max(15, D.host?.fps || 30);
+    D.rx.total = Math.round(frame + 8 + D.rx.rtt / 2 + D.rx.buffer + (D.rx.decode || 0) + 17);
+  }
   renderDiag();
 }
 
@@ -581,6 +592,7 @@ function renderDiag() {
   const parts = [`${h.codec || '?'}${h.hw ? ' hw' : ''} · ${h.w}×${h.h}`, x ? `compu ${h.fps} → iPhone ${x.fps} fps` : `${h.fps} fps`,
     `${(h.kbps / 1000).toFixed(1)} Mb/s`, h.route];
   if (x && x.loss >= 1) parts.push(`pérdida ${x.loss.toFixed(0)}%`);
+  if (x && x.total) parts.push(`retardo ~${x.total} ms`);
   $('#rStats').textContent = parts.join(' · ');
   let msg, warn = true;
   if (h.limit === 'bandwidth') msg = `Cuello de botella: la RED. La compu manda menos cuadros porque la conexión no da más (${(h.kbps / 1000).toFixed(1)} Mb/s).`;
@@ -590,12 +602,34 @@ function renderDiag() {
       (x.loss >= 1 ? ` (se pierde el ${x.loss.toFixed(0)} % de los paquetes: es la red).` : '.');
   else if (h.fps < 40) msg = `La compu está mandando ${h.fps} fps. Si la pantalla se mueve (un juego), el límite está en la CAPTURA de la compu; con la pantalla quieta es normal.`;
   else { msg = 'Sin cuello de botella: en el iPhone se ven los cuadros que manda la compu.'; warn = false; }
+  if (x && x.total) {
+    const biggest = [['el búfer del iPhone', x.buffer], ['la red (ida)', Math.round(x.rtt / 2)], ['decodificar en el iPhone', x.decode || 0]]
+      .sort((a, b) => b[1] - a[1])[0];
+    msg += ` Retardo estimado ~${x.total} ms; lo que más suma: ${biggest[0]} (${biggest[1]} ms).`;
+  }
   $('#rDiag').textContent = msg;
   $('#rDiag').classList.toggle('warn', warn);
   const lim = { none: 'ninguno', bandwidth: 'red', cpu: 'CPU', other: 'otro' }[h.limit] || h.limit || '—';
   $('#rDiagNum').textContent = [`compu ${h.fps} fps`, x ? `iPhone ${x.fps} fps` : '', x && x.rtt != null ? `latencia ${x.rtt} ms` : '',
     x && x.jitter != null ? `jitter ${x.jitter} ms` : '', x ? `pérdida ${x.loss.toFixed(1)} %` : '', x && x.drop ? `${x.drop} cuadros descartados` : '',
-    x && x.freeze ? `congelado ${x.freeze.toFixed(1)} s` : '', `límite según la compu: ${lim}`].filter(Boolean).join(' · ');
+    x && x.freeze ? `congelado ${x.freeze.toFixed(1)} s` : '', `límite según la compu: ${lim}`,
+    x && x.buffer != null ? `búfer del iPhone ${x.buffer} ms` : '', x && x.decode != null ? `decodificar ${x.decode} ms` : '',
+    `baja latencia: ${!lowLatSupported() ? 'no disponible' : cfg.lowLat ? 'sí' : 'no'}`].filter(Boolean).join(' · ');
+}
+
+// "Baja latencia": le pide al navegador que use el búfer mínimo antes de mostrar cada cuadro (si lo permite).
+const lowLatSupported = () => typeof RTCRtpReceiver !== 'undefined' &&
+  ('playoutDelayHint' in RTCRtpReceiver.prototype || 'jitterBufferTarget' in RTCRtpReceiver.prototype);
+function applyLowLatency() {
+  const L = R.live;
+  if (!L) return;
+  for (const r of L.pc.getReceivers()) {
+    if (r.track?.kind !== 'video') continue;
+    try {
+      if ('playoutDelayHint' in r) r.playoutDelayHint = cfg.lowLat ? 0 : null;
+      if ('jitterBufferTarget' in r) r.jitterBufferTarget = cfg.lowLat ? 0 : null;
+    } catch { /* el navegador no lo acepta */ }
+  }
 }
 
 // ------------------------------------------------------------ protocolo de entrada (igual que host/src/protocol.js)
@@ -1124,6 +1158,9 @@ function setupRemote() {
     $('#rFpsSel').value = String(cfg.fps);
   }));
   $('#rFpsSel').value = String(cfg.fps || 60);
+  $('#rLowLat').checked = !!cfg.lowLat;
+  if (!lowLatSupported()) { $('#rLowLat').disabled = true; $('#rLowLatNote').textContent = '(este navegador no lo permite)'; }
+  $('#rLowLat').addEventListener('change', (e) => { cfg.lowLat = e.target.checked; saveCfg(); applyLowLatency(); D.last = null; });
   $('#rFpsSel').addEventListener('change', (e) => {
     cfg.fps = Number(e.target.value);
     saveCfg();
