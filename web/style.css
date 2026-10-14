@@ -261,5 +261,22 @@ body.fs .stage { border-radius: 0; }
 .knob { width: 48%; height: 48%; border-radius: 50%; background: rgba(232, 234, 237, .6); pointer-events: none; }
 .gp-stick.down .knob { background: rgba(185, 200, 255, .85); }
 .gp-stick.click { border-color: #fff; box-shadow: 0 0 0 3px rgba(91, 124, 250, .8); }
-.gp-off { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); font: 600 12px system-ui; padding: 5px 9px;
-  border-radius: 10px; border: 0; background: rgba(0, 0, 0, .55); color: #fff; white-space: nowrap; }
+.gp-top { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; }
+.gp-off { font: 600 12px system-ui; padding: 5px 9px; border-radius: 10px; border: 0; background: rgba(0, 0, 0, .55); color: #fff; white-space: nowrap; }
+
+/* Diseño DS: sin palancas; cruceta y botones más grandes; Select/Start donde en el diseño PS están L3/R3 */
+.gp .gp-ds { display: none; }
+.gp.ds .gp-ds { display: grid; }
+.gp.ds .gp-pad.gp-ds { display: block; }
+.gp.ds > .gp-c:not(.gp-ds), .gp.ds > .gp-pad:not(.gp-ds) { display: none; }
+.gp-dsl { left: 2%; top: 3%; }
+.gp-dsr { right: 2%; top: 3%; }
+.gp-dsl, .gp-dsr { width: clamp(64px, 24cqh, 104px); }
+.gp-dsdpad, .gp-dsface { width: clamp(120px, 50cqh, 200px); top: auto; bottom: 10%; }
+.gp-dsdpad { left: 4%; }
+.gp-dsface { right: 4%; }
+.gp-dsface .gp-b { border-radius: 50%; font-size: clamp(15px, 6.5cqh, 24px); }
+.gp-dssel, .gp-dsstart { width: clamp(58px, 20cqh, 88px); height: clamp(30px, 10cqh, 42px); border-radius: 14px;
+  font-size: clamp(10px, 3.8cqh, 13px); bottom: calc(6% + clamp(70px, 29cqh, 122px) - 10px); }
+.gp-dssel { left: calc(22% + clamp(70px, 29cqh, 122px) - 8px); }
+.gp-dsstart { right: calc(22% + clamp(70px, 29cqh, 122px) - 8px); }

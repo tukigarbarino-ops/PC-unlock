@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.12">
+  <link rel="stylesheet" href="style.css?v=1.13">
 </head>
 <body>
   <main id="app">
@@ -117,7 +117,28 @@
           <div class="gp-c gp-stick gp-rs" data-stick="r"><div class="knob"></div></div>
           <div class="gp-c gp-s3 gp-l3" data-gb="0040">L3</div>
           <div class="gp-c gp-s3 gp-r3" data-gb="0080">R3</div>
-          <button id="gpOff" class="gp-off" aria-label="Salir del joystick">✕ 🎮</button>
+          <!-- Diseño DS (emuladores de Nintendo DS): cruceta, A B X Y, L R, Start y Select. Manda los mismos botones de Xbox
+               que el diseño PS, según la asignación sugerida en melonDS: A=✕, B=○, X=△, Y=□, Start=Options, Select=Share -->
+          <div class="gp-c gp-sh gp-ds gp-dsl" data-gb="0100">L</div>
+          <div class="gp-c gp-sh gp-ds gp-dsr" data-gb="0200">R</div>
+          <div class="gp-pad gp-ds gp-dsdpad">
+            <div class="gp-c gp-b bu" data-gb="0001">▲</div>
+            <div class="gp-c gp-b bl" data-gb="0004">◀</div>
+            <div class="gp-c gp-b br" data-gb="0008">▶</div>
+            <div class="gp-c gp-b bd" data-gb="0002">▼</div>
+          </div>
+          <div class="gp-pad gp-ds gp-dsface">
+            <div class="gp-c gp-b bu" data-gb="8000">X</div>
+            <div class="gp-c gp-b bl" data-gb="4000">Y</div>
+            <div class="gp-c gp-b br" data-gb="1000">A</div>
+            <div class="gp-c gp-b bd" data-gb="2000">B</div>
+          </div>
+          <div class="gp-c gp-ds gp-dssel" data-gb="0020">Select</div>
+          <div class="gp-c gp-ds gp-dsstart" data-gb="0010">Start</div>
+          <div class="gp-top">
+            <button id="gpOff" class="gp-off" aria-label="Salir del joystick">✕ 🎮</button>
+            <button id="gpLayout" class="gp-off" aria-label="Cambiar diseño del joystick">DS</button>
+          </div>
         </div>
 
         <div id="rOverlay" class="overlay">
@@ -274,7 +295,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.12"></script>
-  <script src="remote.js?v=1.13"></script>
+  <script src="app.js?v=1.13"></script>
+  <script src="remote.js?v=1.14"></script>
 </body>
 </html>

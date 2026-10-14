@@ -1011,6 +1011,18 @@ function setupGamepad() {
   });
   $('#btnGp').addEventListener('click', () => setGamepad(!GP.on));
   $('#gpOff').addEventListener('click', () => setGamepad(false));
+  // Diseño PS (palancas) o DS (emuladores de Nintendo DS); se recuerda el último
+  const setLayout = (ds) => {
+    root.classList.toggle('ds', ds);
+    $('#gpLayout').textContent = ds ? 'PS' : 'DS';
+    cfg.gpLayout = ds ? 'ds' : 'ps';
+    saveCfg();
+    resetGamepad();
+    padSend();
+  };
+  root.classList.toggle('ds', cfg.gpLayout === 'ds');
+  $('#gpLayout').textContent = cfg.gpLayout === 'ds' ? 'PS' : 'DS';
+  $('#gpLayout').addEventListener('click', () => setLayout(!root.classList.contains('ds')));
 }
 
 function resetGamepad() {
@@ -1187,7 +1199,7 @@ function setupRemote() {
   document.addEventListener('touchstart', (e) => {
     if (!R.visible) return;
     const t = e.target;
-    if (t.closest('.overlay button, .seg button, #rFsExit, #gpOff, select, input, label')) return;
+    if (t.closest('.overlay button, .seg button, #rFsExit, #gpOff, #gpLayout, select, input, label')) return;
     if (t.closest(NO_GESTURE)) e.preventDefault();
   }, { passive: false });
   for (const ev of ['contextmenu', 'selectstart', 'gesturestart']) document.addEventListener(ev, (e) => { if (R.visible) e.preventDefault(); });

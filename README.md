@@ -106,6 +106,9 @@ iPhone (vista "Remoto")
   (github.com/nefarius/ViGEmBus → Releases; si usás DS4Windows o HidHide probablemente ya lo tenés). Solo con el
   programa de la compu (no por la ESP). Si se corta la conexión, el control vuelve a reposo a los 2 s.
   "✕ 🎮" lo cierra y desenchufa el control virtual. Las palancas llegan al tope con poco recorrido del dedo.
+  Con el botón **DS / PS** (arriba al centro) se cambia al **diseño DS** para emuladores de Nintendo DS: cruceta grande,
+  A B X Y con la disposición de Nintendo, L, R, Start y Select, sin palancas. Manda A=✕, B=○, X=△, Y=□, Start=Options,
+  Select=Share (la asignación sugerida para melonDS).
 - **Modo juego (⚙):** la compu captura y manda a **720p o 1080p** en vez de la resolución completa, priorizando los fps.
   Los cuadros pesan mucho menos, así que llegan antes al iPhone: es lo que más baja el retardo en juegos y emuladores.
   Se prende y apaga sin reconectar.

@@ -341,6 +341,26 @@ async function main() {
     await host.waitFor(/joystick a reposo/, 5000);
     await page.dispatchEvent('#gp .cr', 'pointerup', { pointerId: 63 });
     ok('si se corta con un botón del joystick apretado, el host lo suelta a los ~2 s');
+    // diseño DS (emuladores de Nintendo DS): cruceta, A B X Y, L R, Start y Select; sin palancas
+    await page.evaluate(() => { const R = window.PCU.R; R.pingTimer = setInterval(() => {}, 1e9); });
+    await page.click('#gpLayout');
+    assert.ok(await page.isVisible('#gp .gp-dsface') && await page.isHidden('#gp .gp-ls') && await page.isHidden('#gp .gp-l3'));
+    const dsBits = [['.gp-dsface .br', 0x1000, 'A'], ['.gp-dsface .bd', 0x2000, 'B'], ['.gp-dsface .bu', 0x8000, 'X'], ['.gp-dsface .bl', 0x4000, 'Y'],
+      ['.gp-dsl', 0x0100, 'L'], ['.gp-dsr', 0x0200, 'R'], ['.gp-dsstart', 0x0010, 'Start'], ['.gp-dssel', 0x0020, 'Select'], ['.gp-dsdpad .bu', 0x0001, '▲']];
+    let pid = 80;
+    for (const [sel, bit, name] of dsBits) {
+      await page.dispatchEvent('#gp ' + sel, 'pointerdown', { pointerId: ++pid });
+      await until(() => (xstate().buttons || 0) === bit, 3000, `DS ${name}`);
+      await page.dispatchEvent('#gp ' + sel, 'pointerup', { pointerId: pid });
+      await until(() => !(xstate().buttons || 0), 3000, `DS ${name} suelto`);
+    }
+    const dsBoxes = await page.$$eval('#gp .gp-ds, #gp .gp-top', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; }));
+    for (let i = 0; i < dsBoxes.length; i++) for (let j = i + 1; j < dsBoxes.length; j++) assert.ok(!overlap(dsBoxes[i], dsBoxes[j]), `controles DS superpuestos ${i}/${j}`);
+    await shot('5-horizontal-joystick-ds');
+    await page.click('#gpLayout');
+    assert.ok(await page.isVisible('#gp .gp-ls'));
+    ok('diseño DS: A B X Y (disposición Nintendo), L R, Start, Select y cruceta llegan al control virtual; sin superponerse; se vuelve al diseño PS');
+
     await page.click('#gpOff');
     await host.waitFor(/joystick virtual desenchufado/, 5000);
     await until(() => pads().length === before.length, 5000, 'control desenchufado');
