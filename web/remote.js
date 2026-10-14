@@ -1020,10 +1020,17 @@ async function remoteUnlock(btn) {
 
 // ------------------------------------------------------------ eventos
 
+// En horizontal la columna de la derecha se ensancha solo si el teclado está abierto
+function panelLayout() {
+  document.body.classList.toggle('kb-open', !$('#panel-kbd').hidden);
+  setTimeout(applyZoom, 60);
+}
+
 function togglePanel(name) {
   const p = $('#panel-' + name);
   p.hidden = !p.hidden;
   document.querySelector(`[data-panel="${name}"]`).classList.toggle('on', !p.hidden);
+  panelLayout();
   const open = [...document.querySelectorAll('.panel')].filter((x) => !x.hidden).map((x) => x.id.slice(6));
   cfg.panels = open;
   saveCfg();
@@ -1066,6 +1073,7 @@ function setupRemote() {
   for (const ev of ['contextmenu', 'selectstart', 'gesturestart']) document.addEventListener(ev, (e) => { if (R.visible) e.preventDefault(); });
   for (const name of cfg.panels || ['kbd', 'pad']) { const p = $('#panel-' + name); if (p) { p.hidden = false; document.querySelector(`[data-panel="${name}"]`)?.classList.add('on'); } }
   document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => togglePanel(b.dataset.panel)));
+  panelLayout();
   $('#btnRemote').addEventListener('click', showRemote);
   $('#rBack').addEventListener('click', showHome);
   $('#rConnect').addEventListener('click', connectRemote);

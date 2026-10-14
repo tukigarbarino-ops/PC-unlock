@@ -182,6 +182,8 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   (350 ms) con el mismo botón, doble toque = doble clic, bloqueo de gestos de iOS (`touchstart` con preventDefault no
   pasivo + `user-select: none` + `-webkit-touch-callout: none`), selector 30/60 fps, joystick DualSense superpuesto
   (en horizontal oculta la columna derecha), L3/R3 con botón propio o doble toque en la palanca (300 ms) y mantener.
+  Ajuste 13/10: en horizontal la columna derecha mide 30 % (38 % si el teclado está abierto, clase `body.kb-open`),
+  botones de arriba de 44 px, L1/R1 contra el borde y L2/R2 arriba corridos hacia el centro (escalonados).
   Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.

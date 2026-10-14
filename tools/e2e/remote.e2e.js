@@ -231,6 +231,19 @@ async function main() {
     assert.ok(await page.isVisible('.rbar'));
     ok('pantalla completa en horizontal: esconde la barra y no tapa el video');
 
+    // solo touchpad: la columna de la derecha se achica y el video crece; botones de arriba de 44 px
+    const stKb = await box('#stage');
+    await page.click('[data-panel="kbd"]'); // cerrar teclado
+    await sleep(300);
+    const stPad = await box('#stage'), padOnly = await box('#pad'), tb = await box('.rtools button');
+    assert.ok(stPad.r - stPad.l > stKb.r - stKb.l, 'sin teclado el video es más ancho');
+    assert.ok(stPad.r - stPad.l >= 0.6 * 844, `video ${stPad.r - stPad.l}px`);
+    assert.ok(!overlap(stPad, padOnly) && padOnly.b <= 390, 'touchpad sin superponer');
+    assert.ok(tb.b - tb.t >= 44, `botones de ${tb.b - tb.t}px`);
+    await shot('2b-horizontal-solo-touchpad');
+    ok(`solo touchpad: video ${Math.round(stPad.r - stPad.l)} px de ancho (con teclado ${Math.round(stKb.r - stKb.l)}), touchpad ${Math.round(padOnly.r - padOnly.l)} px, botones de ${Math.round(tb.b - tb.t)} px`);
+    await page.click('[data-panel="kbd"]'); // volver a abrir el teclado
+
     // ---------- joystick: control de Xbox 360 virtual en la compu (ViGEmBus), leído con XInput
     const koffi = require('../../host/node_modules/koffi');
     const XS = koffi.struct('XS', { pkt: 'uint32', buttons: 'uint16', lt: 'uint8', rt: 'uint8', lx: 'int16', ly: 'int16', rx: 'int16', ry: 'int16' });
@@ -242,6 +255,9 @@ async function main() {
     await until(() => page.isVisible('#gp'), 5000, 'joystick en pantalla');
     assert.ok(await page.isHidden('.rside'), 'en horizontal el joystick usa todo el ancho');
     const xpad = await until(() => pads().find((x) => !before.includes(x.i)), 5000, 'control en XInput');
+    const l1 = await box('#gp .gp-l1'), l2 = await box('#gp .gp-l2'), r1 = await box('#gp .gp-r1'), r2 = await box('#gp .gp-r2');
+    assert.ok(l2.t < l1.t && l2.l > l1.l && l2.l < l1.r && r2.t < r1.t && r2.r < r1.r && r2.r > r1.l, 'L2/R2 arriba y corridos hacia el centro');
+    assert.ok(!overlap(l1, l2) && !overlap(r1, r2));
     const [crx, cry] = await keyAt('#gp .cr');
     const lsB = await (await page.$('#gp .gp-ls')).boundingBox();
     const lcx = lsB.x + lsB.width / 2, lcy = lsB.y + lsB.height / 2;

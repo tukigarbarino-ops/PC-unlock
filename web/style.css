@@ -176,7 +176,8 @@ body.shift-on .key:not(.wide-label) .kl { text-transform: uppercase; }
 @media (orientation: landscape) and (max-height: 600px) {
   body.remote-on main { max-width: none; padding: 4px 6px 4px; }
   #remote {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 44%); grid-template-rows: auto minmax(0, 1fr); gap: 4px 8px;
+    /* columna de la derecha angosta (más video); con el teclado abierto se ensancha lo justo para que las teclas sean cómodas */
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 30%); grid-template-rows: auto minmax(0, 1fr); gap: 4px 8px;
     height: calc(100dvh - 8px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
   #remote[hidden] { display: none; }
@@ -184,8 +185,10 @@ body.shift-on .key:not(.wide-label) .kl { text-transform: uppercase; }
   .rbar .icon-btn { width: 36px; height: 36px; border-radius: 11px; }
   .stage { grid-column: 1; grid-row: 2; max-height: 100%; align-self: center; border-radius: 10px; }
   .rside { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-  .rtools { margin-top: 0; gap: 4px; }
-  .rtools button { padding: 5px 2px; font-size: 13px; border-radius: 10px; }
+  body.kb-open #remote { grid-template-columns: minmax(0, 1fr) minmax(300px, 38%); }
+  .rtools { margin-top: 0; gap: 5px; }
+  .rtools button { min-height: 44px; padding: 4px 2px; font-size: 15px; border-radius: 12px; }
+  .rtools button[aria-label] { font-size: 21px; }
   .panel { margin-top: 4px; }
   #panel-pad { flex: 1 1 0; min-height: 110px; display: flex; flex-direction: column; }
   .pad { flex: 1 1 auto; width: auto; height: 100%; max-width: 100%; min-height: 0; aspect-ratio: 1; }
@@ -218,10 +221,11 @@ body.fs .stage { border-radius: 0; }
 }
 .gp-c.down { background: rgba(91, 124, 250, .78); border-color: #b9c8ff; }
 .gp-sh { width: clamp(52px, 20cqh, 86px); height: clamp(28px, 10.5cqh, 42px); border-radius: 12px; }
-.gp-l2 { left: 2%; top: 3%; }
+/* L1 contra el borde y L2 arriba, corrido hacia el centro (escalonados, como los gatillos de un control) */
 .gp-l1 { left: 2%; top: calc(3% + clamp(28px, 10.5cqh, 42px) + 6px); }
-.gp-r2 { right: 2%; top: 3%; }
+.gp-l2 { left: calc(2% + clamp(52px, 20cqh, 86px) * .85); top: 3%; }
 .gp-r1 { right: 2%; top: calc(3% + clamp(28px, 10.5cqh, 42px) + 6px); }
+.gp-r2 { right: calc(2% + clamp(52px, 20cqh, 86px) * .85); top: 3%; }
 .gp-sm { width: clamp(46px, 16cqh, 72px); height: clamp(22px, 8cqh, 32px); border-radius: 10px; font-size: clamp(9px, 3.6cqh, 12px); }
 .gp-share { left: 27%; top: 4%; }
 .gp-options { right: 27%; top: 4%; }
