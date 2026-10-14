@@ -242,6 +242,19 @@ async function main() {
     assert.ok(tb.b - tb.t >= 44, `botones de ${tb.b - tb.t}px`);
     await shot('2b-horizontal-solo-touchpad');
     ok(`solo touchpad: video ${Math.round(stPad.r - stPad.l)} px de ancho (con teclado ${Math.round(stKb.r - stKb.l)}), touchpad ${Math.round(padOnly.r - padOnly.l)} px, botones de ${Math.round(tb.b - tb.t)} px`);
+    // sin ningún panel: el video ocupa casi todo y a la derecha queda una tira con los botones apilados
+    await page.click('[data-panel="pad"]');
+    await sleep(300);
+    const stFull = await box('#stage'), side = await box('.rside');
+    const tbs = await page.$$eval('.rtools button', (bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return { l: r.left, t: r.top, h: r.height }; }));
+    assert.ok(side.r - side.l <= 60, `tira de ${side.r - side.l}px`);
+    assert.ok(stFull.r - stFull.l >= 0.88 * 844, `video ${stFull.r - stFull.l}px`);
+    assert.ok(tbs.every((b, i) => i === 0 || (Math.abs(b.l - tbs[0].l) < 2 && b.t > tbs[i - 1].t)), 'botones apilados');
+    assert.ok(tbs.every((b) => b.h >= 44) && tbs.at(-1).t + tbs.at(-1).h <= 390, 'botones grandes y dentro de la pantalla');
+    assert.deepEqual(await page.$$eval('.rtools button', (bs) => bs.slice(0, 2).map((b) => b.textContent.trim())), ['⌨️', '🖱️']);
+    await shot('2c-horizontal-sin-paneles');
+    ok(`sin paneles: el video ocupa ${Math.round(stFull.r - stFull.l)} px de ancho y los botones (⌨️ 🖱️ ♫ 🎮 ⚙) quedan apilados en una tira de ${Math.round(side.r - side.l)} px`);
+    await page.click('[data-panel="pad"]');
     await page.click('[data-panel="kbd"]'); // volver a abrir el teclado
 
     // ---------- joystick: control de Xbox 360 virtual en la compu (ViGEmBus), leído con XInput

@@ -126,8 +126,8 @@ body.fs .fs-exit { display: grid; }
 .seg button { border: 0; padding: 8px 16px; background: #1b1f27; color: var(--muted); font: 600 14px system-ui; }
 .seg button.on { background: #1d2b55; color: #fff; }
 
-.rtools { display: grid; grid-template-columns: 1.4fr 1.4fr 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
-.rtools button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 12px; padding: 10px 4px; font-size: 14px; }
+.rtools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+.rtools button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 12px; padding: 8px 4px; font-size: 22px; line-height: 1.2; }
 .rtools button.on { background: #1d2b55; border-color: var(--accent); }
 .ropts { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .ropts select { min-width: 0; padding: 6px 8px; border-radius: 10px; background: var(--card); color: var(--text); border: 1px solid var(--line); font-size: 14px; }
@@ -186,9 +186,12 @@ body.shift-on .key:not(.wide-label) .kl { text-transform: uppercase; }
   .stage { grid-column: 1; grid-row: 2; max-height: 100%; align-self: center; border-radius: 10px; }
   .rside { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
   body.kb-open #remote { grid-template-columns: minmax(0, 1fr) minmax(300px, 38%); }
+  /* Sin paneles abiertos: el video ocupa todo y a la derecha queda una tira con los botones apilados */
+  body.no-panels #remote { grid-template-columns: minmax(0, 1fr) 52px; }
+  body.no-panels .rtools { grid-template-columns: 1fr; gap: 6px; }
+  body.no-panels .rtools button { min-height: 48px; padding: 0; }
   .rtools { margin-top: 0; gap: 5px; }
-  .rtools button { min-height: 44px; padding: 4px 2px; font-size: 15px; border-radius: 12px; }
-  .rtools button[aria-label] { font-size: 21px; }
+  .rtools button { min-height: 44px; padding: 4px 2px; font-size: 21px; border-radius: 12px; }
   .panel { margin-top: 4px; }
   #panel-pad { flex: 1 1 0; min-height: 110px; display: flex; flex-direction: column; }
   .pad { flex: 1 1 auto; width: auto; height: 100%; max-width: 100%; min-height: 0; aspect-ratio: 1; }

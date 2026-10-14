@@ -1023,6 +1023,7 @@ async function remoteUnlock(btn) {
 // En horizontal la columna de la derecha se ensancha solo si el teclado está abierto
 function panelLayout() {
   document.body.classList.toggle('kb-open', !$('#panel-kbd').hidden);
+  document.body.classList.toggle('no-panels', [...document.querySelectorAll('.panel')].every((p) => p.hidden));
   setTimeout(applyZoom, 60);
 }
 
