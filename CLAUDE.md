@@ -181,7 +181,8 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   compacto con capas ?123/#+= (símbolos mandan su combinación LatAm), clic sostenido = tocar y volver a apoyar
   (350 ms) con el mismo botón, doble toque = doble clic, bloqueo de gestos de iOS (`touchstart` con preventDefault no
   pasivo + `user-select: none` + `-webkit-touch-callout: none`), selector 30/60 fps, joystick DualSense superpuesto
-  (en horizontal oculta la columna derecha). Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
+  (en horizontal oculta la columna derecha), L3/R3 con botón propio o doble toque en la palanca (300 ms) y mantener.
+  Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.
 - **Teclado propio dibujado en la app** (no el del iPhone): todas las letras y números, F1–F12, Esc, Tab, Enter,

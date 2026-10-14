@@ -865,8 +865,9 @@ function setupGamepad() {
   });
   root.querySelectorAll('[data-stick]').forEach((el) => {
     const [kx, ky] = el.dataset.stick === 'l' ? ['lx', 'ly'] : ['rx', 'ry'];
+    const click = el.dataset.stick === 'l' ? 0x0040 : 0x0080; // L3 / R3
     const knob = el.querySelector('.knob');
-    let pid = null;
+    let pid = null, lastUp = 0, clicking = false;
     const move = (e) => {
       const r = el.getBoundingClientRect();
       const rad = r.width / 2;
@@ -878,14 +879,25 @@ function setupGamepad() {
       GP.st[ky] = clamp16(-dy * 32767); // en XInput, arriba es positivo
       padSend();
     };
-    el.addEventListener('pointerdown', (e) => { e.preventDefault(); if (pid !== null) return; pid = e.pointerId; try { el.setPointerCapture(pid); } catch { /* nada */ } el.classList.add('down'); move(e); });
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (pid !== null) return;
+      pid = e.pointerId;
+      try { el.setPointerCapture(pid); } catch { /* nada */ }
+      el.classList.add('down');
+      // doble toque y mantener = L3/R3 apretado mientras el dedo sigue en la palanca (se puede seguir moviendo)
+      clicking = performance.now() - lastUp < 300;
+      if (clicking) { GP.st.buttons |= click; el.classList.add('click'); }
+      move(e);
+    });
     el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) move(e); });
     const up = (e) => {
       if (e.pointerId !== pid) return;
       pid = null;
-      el.classList.remove('down');
+      el.classList.remove('down', 'click');
       knob.style.transform = '';
       GP.st[kx] = 0; GP.st[ky] = 0;
+      if (clicking) { GP.st.buttons &= ~click; clicking = false; lastUp = 0; } else lastUp = performance.now();
       padSend();
     };
     el.addEventListener('pointerup', up);

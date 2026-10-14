@@ -243,7 +243,13 @@ body.fs .stage { border-radius: 0; }
 .gp-stick { width: clamp(84px, 36cqh, 150px); aspect-ratio: 1; border-radius: 50%; background: rgba(15, 17, 21, .45); }
 .gp-ls { left: 22%; bottom: 4%; }
 .gp-rs { right: 22%; bottom: 4%; }
+/* L3 / R3 (apretar la palanca): botón chico arriba de cada palanca, del lado de adentro */
+.gp-s3 { width: clamp(32px, 11cqh, 44px); height: clamp(32px, 11cqh, 44px); border-radius: 50%; font-size: clamp(10px, 3.8cqh, 13px);
+  bottom: calc(4% + clamp(84px, 36cqh, 150px) - 14px); }
+.gp-l3 { left: calc(22% + clamp(84px, 36cqh, 150px) - 12px); }
+.gp-r3 { right: calc(22% + clamp(84px, 36cqh, 150px) - 12px); }
 .knob { width: 46%; height: 46%; border-radius: 50%; background: rgba(232, 234, 237, .55); pointer-events: none; }
 .gp-stick.down .knob { background: rgba(185, 200, 255, .85); }
+.gp-stick.click { border-color: #fff; box-shadow: 0 0 0 3px rgba(91, 124, 250, .8); }
 .gp-off { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); font: 600 12px system-ui; padding: 5px 9px;
   border-radius: 10px; border: 0; background: rgba(0, 0, 0, .55); color: #fff; white-space: nowrap; }

@@ -99,8 +99,9 @@ iPhone (vista "Remoto")
   pocos cuadros (es normal ver 1–2 fps): solo se transmite lo que cambia.
 - La vista Remoto bloquea los gestos de iOS (selección de texto, lupa, menú de copiar) en el video, el touchpad y el teclado.
 - **Multimedia (♫):** anterior, play/pausa, siguiente, silencio, volumen − y +.
-- **Joystick (🎮):** controles de DualSense encima del video (dos palancas, △○✕□, flechas, L1/L2/R1/R2, PS, Share,
-  Options). En la compu aparece un **control de Xbox 360** (el que reconocen casi todos los juegos): ✕=A, ○=B, □=X,
+- **Joystick (🎮):** controles de DualSense encima del video (dos palancas, △○✕□, flechas, L1/L2/R1/R2, L3/R3, PS,
+  Share, Options). **L3/R3** (apretar la palanca): con su botón chico, o con **doble toque en la palanca y mantener**
+  (queda apretado mientras la seguís moviendo). En la compu aparece un **control de Xbox 360** (el que reconocen casi todos los juegos): ✕=A, ○=B, □=X,
   △=Y, Share=Back, Options=Start, PS=Guide. Necesita el driver gratuito **ViGEmBus** instalado en Windows
   (github.com/nefarius/ViGEmBus → Releases; si usás DS4Windows o HidHide probablemente ya lo tenés). Solo con el
   programa de la compu (no por la ESP). Si se corta la conexión, el control vuelve a reposo a los 2 s.

@@ -256,6 +256,23 @@ async function main() {
     await touch('touchEnd', [[0, 0, 62]]);
     await until(() => { const x = pads().find((q) => q.i === xpad.i); return x && !x.buttons && !x.rt && !x.lx && !x.ly; }, 5000, 'joystick en reposo');
     ok(`joystick: ✕ + R2 + palanca izquierda llegan al control virtual (XInput: botones 0x${held.buttons.toString(16)}, R2 ${held.rt}, LX ${held.lx}, LY ${held.ly}) y vuelven a reposo`);
+    // L3 / R3: botón chico, o doble toque en la palanca y mantener (se puede seguir moviendo)
+    const xstate = () => pads().find((q) => q.i === xpad.i) || {};
+    await page.dispatchEvent('#gp .gp-l3', 'pointerdown', { pointerId: 70 });
+    await until(() => xstate().buttons & 0x0040, 3000, 'L3 apretado');
+    await page.dispatchEvent('#gp .gp-l3', 'pointerup', { pointerId: 70 });
+    await until(() => !(xstate().buttons & 0x0040), 3000, 'L3 suelto');
+    const rsB = await (await page.$('#gp .gp-rs')).boundingBox();
+    const rcx = rsB.x + rsB.width / 2, rcy = rsB.y + rsB.height / 2;
+    await touch('touchStart', [[rcx, rcy, 71]]); await touch('touchEnd', [[rcx, rcy, 71]]);
+    await sleep(80);
+    await touch('touchStart', [[rcx, rcy, 72]]);
+    await touch('touchMove', [[rcx - rsB.width, rcy, 72]]); // R3 apretado y palanca a la izquierda
+    const r3 = await until(() => { const x = xstate(); return x.buttons & 0x0080 && x.rx < -20000 && x; }, 3000, 'R3 + palanca');
+    await touch('touchEnd', [[rcx - rsB.width, rcy, 72]]);
+    await until(() => { const x = xstate(); return !(x.buttons & 0x0080) && !x.rx; }, 3000, 'R3 suelto');
+    ok(`L3 con su botón y R3 con doble toque en la palanca (mientras se mueve: RX ${r3.rx})`);
+
     // sin mensajes con un botón apretado: el host lo suelta a los ~2 s
     await page.dispatchEvent('#gp .cr', 'pointerdown', { pointerId: 63 });
     await until(() => (pads().find((q) => q.i === xpad.i)?.buttons || 0) & 0x1000, 3000, '✕ apretado');
