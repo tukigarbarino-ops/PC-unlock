@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.4">
+  <link rel="stylesheet" href="style.css?v=1.5">
 </head>
 <body>
   <main id="app">
@@ -76,59 +76,102 @@
           <div id="rStatus" class="rstatus"></div>
           <div id="rStats" class="rstats"></div>
         </div>
+        <div id="rSession" class="rsession" hidden>
+          <b id="rLeft"></b>
+          <button id="rRenew" class="mini" hidden>Renovar</button>
+          <button id="rEnd" class="mini secondary">Cortar</button>
+        </div>
         <button id="rFull" class="icon-btn" aria-label="Pantalla completa">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </button>
       </div>
 
-      <div class="rmain">
-        <div id="stage" class="stage">
-          <video id="rVideo" playsinline muted autoplay></video>
-          <div id="rOverlay" class="overlay">
-            <div id="rOvText">…</div>
-            <button id="rConnect" class="ov-btn">Conectar con Face ID</button>
-            <button id="rOvUnlock" class="ov-btn secondary" hidden>Desbloquear la compu</button>
+      <div id="stage" class="stage">
+        <video id="rVideo" playsinline muted autoplay></video>
+        <button id="rFsExit" class="fs-exit" aria-label="Salir de pantalla completa">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+
+        <!-- Joystick (control de Xbox 360 virtual en la compu, dibujado como DualSense) -->
+        <div id="gp" class="gp" hidden>
+          <div class="gp-c gp-sh gp-l2" data-gt="lt">L2</div>
+          <div class="gp-c gp-sh gp-l1" data-gb="0100">L1</div>
+          <div class="gp-c gp-sh gp-r2" data-gt="rt">R2</div>
+          <div class="gp-c gp-sh gp-r1" data-gb="0200">R1</div>
+          <div class="gp-c gp-sm gp-share" data-gb="0020">Share</div>
+          <div class="gp-c gp-sm gp-options" data-gb="0010">Options</div>
+          <div class="gp-c gp-ps" data-gb="0400">PS</div>
+          <div class="gp-pad gp-dpad">
+            <div class="gp-c gp-b bu" data-gb="0001">▲</div>
+            <div class="gp-c gp-b bl" data-gb="0004">◀</div>
+            <div class="gp-c gp-b br" data-gb="0008">▶</div>
+            <div class="gp-c gp-b bd" data-gb="0002">▼</div>
           </div>
-          <div id="rLocked" class="overlay locked" hidden>
-            <div>🔒 La compu está bloqueada.<br><small>Windows no deja ver la pantalla de bloqueo.</small>
-              <br><small id="rLockEsp" hidden>El teclado de la app sigue andando por la ESP (Bluetooth).</small></div>
-            <button id="rLockUnlock" class="ov-btn">Desbloquear</button>
+          <div class="gp-pad gp-face">
+            <div class="gp-c gp-b bu tri" data-gb="8000">△</div>
+            <div class="gp-c gp-b bl sq" data-gb="4000">□</div>
+            <div class="gp-c gp-b br ci" data-gb="2000">○</div>
+            <div class="gp-c gp-b bd cr" data-gb="1000">✕</div>
           </div>
+          <div class="gp-c gp-stick gp-ls" data-stick="l"><div class="knob"></div></div>
+          <div class="gp-c gp-stick gp-rs" data-stick="r"><div class="knob"></div></div>
+          <button id="gpOff" class="gp-off" aria-label="Salir del joystick">✕ 🎮</button>
         </div>
 
-        <div class="rside">
-          <div class="rtools">
-            <button data-panel="pad">Touchpad</button>
-            <button data-panel="kbd">Teclado</button>
-            <button data-panel="media">Multimedia</button>
+        <div id="rOverlay" class="overlay">
+          <div id="rOvText">…</div>
+          <div id="rFps" class="seg" hidden>
+            <button data-fps="30">30 fps</button>
+            <button data-fps="60">60 fps</button>
           </div>
+          <button id="rConnect" class="ov-btn">Conectar con Face ID</button>
+          <button id="rOvUnlock" class="ov-btn secondary" hidden>Desbloquear la compu</button>
+        </div>
+        <div id="rLocked" class="overlay locked" hidden>
+          <div>🔒 La compu está bloqueada.<br><small>Windows no deja ver la pantalla de bloqueo.</small>
+            <br><small id="rLockEsp" hidden>El teclado de la app sigue andando por la ESP (Bluetooth).</small></div>
+          <button id="rLockUnlock" class="ov-btn">Desbloquear</button>
+        </div>
+      </div>
+
+      <div class="rside">
+        <div class="rtools">
+          <button data-panel="kbd">Teclado</button>
+          <button data-panel="pad">Touchpad</button>
+          <button data-panel="media" aria-label="Multimedia">♫</button>
+          <button id="btnGp" aria-label="Joystick">🎮</button>
+          <button data-panel="opts" aria-label="Opciones">⚙</button>
+        </div>
+
+        <div id="panel-opts" class="panel" hidden>
           <div class="ropts">
             <select id="rMonitor" hidden aria-label="Monitor"></select>
+            <label class="switch">Fluidez
+              <select id="rFpsSel" aria-label="Fluidez"><option value="60">60 fps</option><option value="30">30 fps</option></select>
+            </label>
+            <label class="switch">Teclado
+              <select id="rKbSel" aria-label="Teclado"><option value="compact">compacto</option><option value="full">completo</option></select>
+            </label>
             <label class="switch"><input type="checkbox" id="rSaver"> Ahorro de datos</label>
           </div>
-          <div id="rSession" class="rsession" hidden>
-            Sesión: <b id="rLeft"></b>
-            <button id="rRenew" class="mini" hidden>Renovar con Face ID</button>
-            <button id="rEnd" class="mini secondary">Cortar</button>
+        </div>
+        <div id="panel-media" class="panel" hidden>
+          <div class="media">
+            <button data-media="b6" aria-label="Anterior">⏮</button>
+            <button data-media="cd" aria-label="Play / pausa">⏯</button>
+            <button data-media="b5" aria-label="Siguiente">⏭</button>
+            <button data-media="e2" aria-label="Silencio">🔇</button>
+            <button data-media="ea" data-repeat="1" aria-label="Bajar volumen">🔉</button>
+            <button data-media="e9" data-repeat="1" aria-label="Subir volumen">🔊</button>
           </div>
-
-          <div id="panel-pad" class="panel" hidden>
-            <div id="pad" class="pad"><span>clic izquierdo</span><span>clic derecho</span></div>
-            <p class="hint center">Arrastrá para mover · tocá para hacer clic · dos dedos = scroll · tocar y volver a apoyar = arrastrar</p>
-          </div>
-          <div id="panel-kbd" class="panel" hidden>
-            <div id="kbd" class="kbd"></div>
-          </div>
-          <div id="panel-media" class="panel" hidden>
-            <div class="media">
-              <button data-media="b6" aria-label="Anterior">⏮</button>
-              <button data-media="cd" aria-label="Play / pausa">⏯</button>
-              <button data-media="b5" aria-label="Siguiente">⏭</button>
-              <button data-media="e2" aria-label="Silencio">🔇</button>
-              <button data-media="ea" data-repeat="1" aria-label="Bajar volumen">🔉</button>
-              <button data-media="e9" data-repeat="1" aria-label="Subir volumen">🔊</button>
-            </div>
-          </div>
+        </div>
+        <div id="panel-kbd" class="panel" hidden>
+          <div class="kb-head"><button id="kbMode" class="kb-mode">Teclado completo</button></div>
+          <div id="kbd" class="kbd"></div>
+        </div>
+        <div id="panel-pad" class="panel" hidden>
+          <div id="pad" class="pad"><span>clic izquierdo</span><span>clic derecho</span></div>
+          <p class="hint center pad-hint">Tocá = clic · tocá y volvé a apoyar = arrastrar · doble toque = doble clic · dos dedos = scroll</p>
         </div>
       </div>
     </section>
@@ -220,7 +263,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.4"></script>
-  <script src="remote.js?v=1.4"></script>
+  <script src="app.js?v=1.5"></script>
+  <script src="remote.js?v=1.5"></script>
 </body>
 </html>

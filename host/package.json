@@ -1,7 +1,7 @@
 {
   "name": "pc-unlock-host",
   "productName": "PC Unlock Host",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Pantalla, mouse y teclado de la compu desde la web app de PC Unlock",
   "main": "src/main.js",
   "private": true,

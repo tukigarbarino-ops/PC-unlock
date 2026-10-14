@@ -6,9 +6,10 @@
 //   0x05 botón arriba  u8 máscara                        0x06 rueda         i16 vertical, i16 horizontal (120 = un paso)
 //   0x07 multimedia    u16 uso HID (página Consumer)     0x08 soltar todo
 //   0x09 latido (no hace nada; mantiene vivo el "soltar a los 2 s")
+//   0x0A joystick      u16 botones (bits XUSB), u8 L2, u8 R2, i16 LX, LY, RX, RY (Y positivo = arriba). Solo por el host.
 
-const OP = { KEY_DOWN: 1, KEY_UP: 2, MOVE: 3, BTN_DOWN: 4, BTN_UP: 5, WHEEL: 6, CONSUMER: 7, RELEASE_ALL: 8, PING: 9 };
-const LEN = { 1: 2, 2: 2, 3: 5, 4: 2, 5: 2, 6: 5, 7: 3, 8: 1, 9: 1 };
+const OP = { KEY_DOWN: 1, KEY_UP: 2, MOVE: 3, BTN_DOWN: 4, BTN_UP: 5, WHEEL: 6, CONSUMER: 7, RELEASE_ALL: 8, PING: 9, PAD: 10 };
+const LEN = { 1: 2, 2: 2, 3: 5, 4: 2, 5: 2, 6: 5, 7: 3, 8: 1, 9: 1, 10: 13 };
 
 function decode(buf) {
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
@@ -24,6 +25,8 @@ function decode(buf) {
       case OP.MOVE: out.push({ op, dx: b.readInt16LE(i + 1), dy: b.readInt16LE(i + 3) }); break;
       case OP.WHEEL: out.push({ op, v: b.readInt16LE(i + 1), h: b.readInt16LE(i + 3) }); break;
       case OP.CONSUMER: out.push({ op, usage: b.readUInt16LE(i + 1) }); break;
+      case OP.PAD: out.push({ op, pad: { buttons: b.readUInt16LE(i + 1), lt: b[i + 3], rt: b[i + 4],
+        lx: b.readInt16LE(i + 5), ly: b.readInt16LE(i + 7), rx: b.readInt16LE(i + 9), ry: b.readInt16LE(i + 11) } }); break;
       default: out.push({ op });
     }
     i += len;

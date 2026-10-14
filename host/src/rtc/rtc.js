@@ -3,14 +3,14 @@
 // Ventana oculta: captura el monitor y responde la oferta WebRTC de la app.
 // Video H.264 (aceleración por hardware si Windows la ofrece) + DataChannels "in" (binario) y "ctl" (JSON).
 
-let pc = null, sender = null, track = null, source = null, quality = 'auto', ctl = null;
+let pc = null, sender = null, track = null, source = null, quality = 'auto', fps = 30, ctl = null;
 let lastBytes = 0, lastTs = 0, discTimer = null;
 
 async function capture(src) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: src.id,
-      maxWidth: src.w, maxHeight: src.h, maxFrameRate: 30 } },
+      maxWidth: src.w, maxHeight: src.h, maxFrameRate: fps } },
   });
   const t = stream.getVideoTracks()[0];
   t.contentHint = 'detail'; // escritorio: priorizar nitidez del texto
@@ -35,7 +35,8 @@ async function applyQuality() {
   if (quality === 'saver') {
     e.maxBitrate = 350_000; e.maxFramerate = 12; e.scaleResolutionDownBy = Math.max(1, source.w / 1280);
   } else {
-    e.maxBitrate = 8_000_000; e.maxFramerate = 30; e.scaleResolutionDownBy = Math.max(1, source.w / 2560);
+    // 60 fps: más bitrate para que el movimiento no se vea borroso (igual se adapta solo si la conexión no da)
+    e.maxBitrate = fps === 60 ? 15_000_000 : 8_000_000; e.maxFramerate = fps; e.scaleResolutionDownBy = Math.max(1, source.w / 2560);
   }
   p.degradationPreference = quality === 'saver' ? 'maintain-resolution' : 'balanced';
   try { await sender.setParameters(p); } catch (err) { host.log('setParameters: ' + err.message); }
@@ -82,6 +83,7 @@ host.onStart(async (o) => {
   try {
     source = o.source;
     quality = o.quality;
+    fps = o.fps === 60 ? 60 : 30;
     track = await capture(source);
     pc = new RTCPeerConnection({ iceServers: o.ice, bundlePolicy: 'max-bundle' });
     pc.addEventListener('datachannel', (ev) => {
@@ -125,6 +127,18 @@ host.onStart(async (o) => {
 
 host.onCtl((m) => sendCtl(m));
 host.onQuality((q) => { quality = q; applyQuality(); });
+// Cambiar los fps vuelve a abrir la captura con el tope nuevo (sin renegociar)
+host.onFps(async (f) => {
+  fps = f === 60 ? 60 : 30;
+  try {
+    const t = await capture(source);
+    await sender.replaceTrack(t);
+    if (track) track.stop();
+    track = t;
+    applyQuality();
+  } catch (err) { host.log('cambio de fps: ' + err.message); }
+});
+
 host.onSource(async (src) => {
   try {
     const t = await capture(src);

@@ -250,6 +250,8 @@ function setOverlay(text, { connect = false, unlock = false, busy = false } = {}
   $('#rOvText').textContent = text;
   $('#rConnect').hidden = !connect;
   $('#rConnect').disabled = busy;
+  $('#rFps').hidden = !connect || !hostUsable();
+  document.querySelectorAll('#rFps [data-fps]').forEach((b) => b.classList.toggle('on', Number(b.dataset.fps) === (cfg.fps || 60)));
   $('#rOvUnlock').hidden = !unlock;
 }
 
@@ -328,7 +330,7 @@ async function connectRemote() {
   if (p) { R.prepared = null; clearTimeout(R.refreshTimer); }
   if (ecdh) R.ecdh = null;
   const extra = {};
-  if (p) Object.assign(extra, { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality });
+  if (p) Object.assign(extra, { f: p.fp, h: cfg.hostId, m: cfg.monitor || null, q: R.quality, r: cfg.fps || 60 });
   if (ecdh) extra.e = ecdh.pubB64;
   let signed;
   try {
@@ -398,7 +400,10 @@ function wireLive(L) {
   L.ctl.onmessage = (ev) => { try { onCtl(JSON.parse(ev.data)); } catch { /* mensaje inválido */ } };
   L.ctl.onclose = () => endLive('La compu cerró la sesión.');
   clearInterval(R.pingTimer);
-  R.pingTimer = setInterval(() => { if (R.held.size || R.buttons) sendInput(enc.ping()); }, 500);
+  R.pingTimer = setInterval(() => {
+    if (R.held.size || R.buttons) sendInput(enc.ping());
+    if (GP.on && !padNeutral() && viaHost()) R.live.inp.send(enc.pad(GP.st)); // el host vuelve el joystick a reposo a los 2 s sin mensajes
+  }, 500);
 }
 
 function onCtl(m) {
@@ -407,6 +412,8 @@ function onCtl(m) {
   switch (m.t) {
     case 'hello':
       L.exp = m.exp;
+      if (m.fps) $('#rFpsSel').value = String(m.fps);
+      GP.avail = m.pad === undefined ? null : !!m.pad;
       fillMonitors(m.monitors || [], m.monitor);
       setLocked(!!m.locked);
       break;
@@ -426,6 +433,11 @@ function onCtl(m) {
       break;
     case 'bye': endLive(m.why === 'expired' ? 'Pasó la hora: volvé a conectar con Face ID.' : 'La compu cortó la sesión.', true); break;
     case 'error': setStatus(m.msg || 'Error'); break;
+    case 'pad':
+      clearTimeout(GP.waiting);
+      setStatus(m.err || 'Conectado');
+      showGamepad(!!m.on);
+      break;
     default: break;
   }
 }
@@ -436,6 +448,7 @@ function endLive(why, fromHost = false) {
   R.live = null;
   clearInterval(R.pingTimer);
   releaseAllLocal();
+  showGamepad(false);
   try { if (!fromHost && L.ctl.readyState === 'open') L.ctl.send(JSON.stringify({ t: 'bye' })); } catch { /* cerrada */ }
   try { L.pc.close(); } catch { /* cerrada */ }
   $('#rVideo').srcObject = null;
@@ -563,7 +576,8 @@ function releaseAllLocal() {
 
 // ------------------------------------------------------------ touchpad
 
-const pad = { pts: new Map(), acc: { x: 0, y: 0 }, wheel: { v: 0, h: 0 }, raf: 0, tap: null, lastTap: 0, lastTapX: 0, dragging: false, two: null };
+const pad = { pts: new Map(), acc: { x: 0, y: 0 }, wheel: { v: 0, h: 0 }, raf: 0, tap: null, lastTap: 0, lastMask: 0, dragging: 0, two: null };
+const DRAG_WINDOW = 350; // ms entre soltar y volver a apoyar para que sea "clic sostenido" (o doble clic)
 
 function flushPad() {
   pad.raf = 0;
@@ -588,8 +602,9 @@ function setupPad() {
     if (pad.pts.size === 1) {
       const r = el.getBoundingClientRect();
       const x = e.clientX - r.left;
-      // Tocar y volver a apoyar enseguida (lado izquierdo) = arrastrar con clic izquierdo apretado
-      if (now - pad.lastTap < 300 && pad.lastTapX < r.width / 2 && x < r.width / 2) { pad.dragging = true; buttonEvent(1, true); }
+      // Tocar, soltar y volver a apoyar enseguida = el mismo botón queda APRETADO mientras el dedo está apoyado
+      // (arrastrar ventanas, seleccionar). Si se suelta enseguida, Windows lo ve como doble clic.
+      if (now - pad.lastTap < DRAG_WINDOW && pad.lastMask) { pad.dragging = pad.lastMask; buttonEvent(pad.lastMask, true); }
       pad.tap = { t: now, x, w: r.width };
       pad.two = null;
     } else if (pad.pts.size === 2) {
@@ -626,12 +641,12 @@ function setupPad() {
     pad.pts.delete(e.pointerId);
     const now = performance.now();
     if (pad.pts.size === 0) {
-      if (pad.dragging) { pad.dragging = false; buttonEvent(1, false); pad.lastTap = 0; }
+      if (pad.dragging) { buttonEvent(pad.dragging, false); pad.dragging = 0; pad.lastTap = 0; }
       else if (pad.two && !pad.two.moved && now - pad.two.t < 300) { buttonEvent(2, true); buttonEvent(2, false); } // dos dedos = clic derecho
       else if (pad.tap && now - pad.tap.t < 280 && e.type === 'pointerup') {
         const mask = pad.tap.x < pad.tap.w / 2 ? 1 : 2; // mitad izquierda = clic izq., mitad derecha = clic der.
         buttonEvent(mask, true); buttonEvent(mask, false);
-        pad.lastTap = now; pad.lastTapX = pad.tap.x;
+        pad.lastTap = now; pad.lastMask = mask;
       }
       pad.tap = null;
       pad.two = null;
@@ -643,7 +658,7 @@ function setupPad() {
 
 // ------------------------------------------------------------ teclado (Español Latinoamérica)
 
-// [uso HID, etiqueta, con Shift, con AltGr, ancho]
+// Teclado completo: [uso HID, etiqueta, con Shift, con AltGr, ancho]
 const K = (u, l, s = '', a = '', w = 1) => ({ u, l, s, a, w });
 const M = (u, l, w = 1.3) => ({ u, l, w, mod: true });
 const KEYBOARD = [
@@ -662,42 +677,112 @@ const KEYBOARD = [
   [K(0x49, 'Ins'), K(0x4c, 'Supr'), K(0x4a, 'Inicio'), K(0x4d, 'Fin'), K(0x4b, 'RePág'), K(0x4e, 'AvPág'), K(0x46, 'ImpPnt')],
 ];
 
+// Teclado compacto (como el del celular): letras + capas "?123" y "#+=". Cada símbolo manda la combinación de su
+// tecla en la distribución latinoamericana (por ejemplo @ = AltGr+Q, ! = Shift+1): se escribe el símbolo directo.
+const SH = 0xe1, AG = 0xe6;
+const SYM = { '-': [0x38], '/': [0x24, SH], ':': [0x37, SH], ';': [0x36, SH], '(': [0x25, SH], ')': [0x26, SH], $: [0x21, SH],
+  '&': [0x23, SH], '@': [0x14, AG], '"': [0x1f, SH], '.': [0x37], ',': [0x36], '?': [0x2d, SH], '!': [0x1e, SH], "'": [0x2d],
+  '[': [0x34, SH], ']': [0x32, SH], '{': [0x34], '}': [0x32], '#': [0x20, SH], '%': [0x22, SH], '^': [0x34, AG], '*': [0x30, SH],
+  '+': [0x30], '=': [0x27, SH], _: [0x38, SH], '\\': [0x2d, AG], '|': [0x35], '~': [0x30, AG], '<': [0x64], '>': [0x64, SH],
+  '¿': [0x2e], '¡': [0x2e, SH], '°': [0x35, SH], '¬': [0x35, AG], '´': [0x2f], '¨': [0x2f, SH], '`': [0x32, AG] };
+const S = (ch) => ({ u: SYM[ch][0], l: ch, m: SYM[ch].slice(1), w: 1 });
+const LY = (layer, l, w = 1.4) => ({ layer, l, w });
+const letters = (str) => str.split('').map((c) => K(c === 'ñ' ? 0x33 : 0x04 + c.charCodeAt(0) - 97, c));
+const COMPACT = {
+  abc: [letters('qwertyuiop'), letters('asdfghjklñ'), [M(0xe1, '⇧', 1.4), ...letters('zxcvbnm'), K(0x2a, '⌫', '', '', 1.4)]],
+  123: ['1234567890'.split('').map((c) => K(c === '0' ? 0x27 : 0x1d + Number(c), c)), '-/:;()$&@"'.split('').map(S),
+    [LY('sym', '#+='), K(0x2b, 'Tab', '', '', 1.2), K(0x29, 'Esc', '', '', 1.2), ...".,?!'".split('').map(S), K(0x2a, '⌫', '', '', 1.4)]],
+  sym: ['[]{}#%^*+='.split('').map(S), '_\\|~<>¿¡°¬'.split('').map(S),
+    [LY('123', '123'), ...'´¨`'.split('').map(S), K(0x4c, 'Supr', '', '', 1.2), K(0x4a, 'Inicio', '', '', 1.3), K(0x4d, 'Fin', '', '', 1.1), K(0x2a, '⌫', '', '', 1.4)]],
+};
+const COMPACT_BOTTOM = [LY('switch', '?123'), M(0xe0, 'Ctrl', 1.1), M(0xe3, '⊞', 1), M(0xe2, 'Alt', 1.1), K(0x2c, 'espacio', '', '', 3),
+  K(0x50, '←'), K(0x52, '↑'), K(0x51, '↓'), K(0x4f, '→'), K(0x28, '↵', '', '', 1.3)];
+
+const landscapeMQ = matchMedia('(orientation: landscape) and (max-height: 600px)');
+const kbIsCompact = () => (landscapeMQ.matches ? (cfg.kbLand || 'compact') : (cfg.kbPort || 'full')) === 'compact';
+const kb = { layer: 'abc' };
+
+function makeKey(k) {
+  const b = document.createElement('div');
+  b.className = 'key' + (k.mod ? ' mod' : '') + (k.layer ? ' mod layer' : '') + (k.l.length > 2 ? ' wide-label' : '');
+  b.style.flexGrow = k.w;
+  if (k.u !== undefined) b.dataset.u = k.u;
+  if (k.m) b.dataset.sym = k.l;
+  b.setAttribute('role', 'button');
+  b.setAttribute('aria-label', k.l);
+  const main = document.createElement('span');
+  main.className = 'kl';
+  main.textContent = k.l;
+  b.appendChild(main);
+  if (k.s) { const e = document.createElement('span'); e.className = 'ks'; e.textContent = k.s; b.appendChild(e); }
+  if (k.a) { const e = document.createElement('span'); e.className = 'ka'; e.textContent = k.a; b.appendChild(e); }
+  if (k.layer) setupLayerKey(b, k); else setupKey(b, k);
+  return b;
+}
+
+function row(keys, cls = '') {
+  const r = document.createElement('div');
+  r.className = 'krow' + cls;
+  for (const k of keys) r.appendChild(makeKey(k));
+  return r;
+}
+
 function buildKeyboard() {
-  const kb = $('#kbd');
-  kb.innerHTML = '';
-  KEYBOARD.forEach((row, ri) => {
-    const r = document.createElement('div');
-    r.className = 'krow' + (ri === 0 ? ' fn' : '') + (ri === KEYBOARD.length - 1 ? ' nav' : '');
-    for (const k of row) {
-      const b = document.createElement('div');
-      b.className = 'key' + (k.mod ? ' mod' : '') + (k.l.length > 2 ? ' wide-label' : '');
-      b.style.flexGrow = k.w;
-      b.dataset.u = k.u;
-      b.setAttribute('role', 'button');
-      b.setAttribute('aria-label', k.l);
-      const main = document.createElement('span');
-      main.className = 'kl';
-      main.textContent = k.l;
-      b.appendChild(main);
-      if (k.s) { const s = document.createElement('span'); s.className = 'ks'; s.textContent = k.s; b.appendChild(s); }
-      if (k.a) { const a = document.createElement('span'); a.className = 'ka'; a.textContent = k.a; b.appendChild(a); }
-      setupKey(b, k);
-      r.appendChild(b);
-    }
-    kb.appendChild(r);
+  releaseAllLocal();
+  const el = $('#kbd');
+  el.innerHTML = '';
+  const compact = kbIsCompact();
+  el.classList.toggle('compact', compact);
+  $('#kbMode').textContent = compact ? 'Teclado completo' : 'Teclado compacto';
+  $('#rKbSel').value = compact ? 'compact' : 'full';
+  if (!compact) {
+    KEYBOARD.forEach((r, i) => el.appendChild(row(r, (i === 0 ? ' fn' : '') + (i === KEYBOARD.length - 1 ? ' nav' : ''))));
+    return;
+  }
+  // Las tres capas quedan armadas (solo se ve una): así un dedo que ya está apretando una tecla no se pierde.
+  for (const [name, rows] of Object.entries(COMPACT)) {
+    const layer = document.createElement('div');
+    layer.className = 'kb-layer';
+    layer.dataset.layer = name;
+    layer.hidden = name !== kb.layer;
+    rows.forEach((r) => layer.appendChild(row(r)));
+    el.appendChild(layer);
+  }
+  el.appendChild(row(COMPACT_BOTTOM, ' bottom'));
+  showLayer(kb.layer);
+}
+
+function showLayer(name) {
+  kb.layer = name;
+  document.querySelectorAll('.kb-layer').forEach((l) => { l.hidden = l.dataset.layer !== name; });
+  const sw = document.querySelector('.krow.bottom .layer .kl');
+  if (sw) sw.textContent = name === 'abc' ? '?123' : 'abc';
+}
+
+// Cambiar de capa es un toque (queda en esa capa, como en el iPhone). Ctrl/Shift/Alt/Win siguen siendo "mientras el dedo está".
+function setupLayerKey(el, k) {
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.classList.add('down'); });
+  el.addEventListener('pointerup', () => {
+    el.classList.remove('down');
+    if (k.layer === 'switch') showLayer(kb.layer === 'abc' ? '123' : 'abc');
+    else showLayer(k.layer);
   });
+  el.addEventListener('pointercancel', () => el.classList.remove('down'));
 }
 
 // Cada tecla sigue a SU dedo (multitouch): apretada mientras el dedo está encima, nada queda pegado.
 function setupKey(el, k) {
-  let pid = null, repeat = null;
-  const isShift = k.u === 0xe1 || k.u === 0xe5;
+  let pid = null, repeat = null, extra = [];
+  const isShift = k.mod && (k.u === 0xe1 || k.u === 0xe5);
   const down = (e) => {
     e.preventDefault();
     if (pid !== null) return;
     pid = e.pointerId;
     try { el.setPointerCapture(pid); } catch { /* sin captura */ }
     el.classList.add('down');
+    // símbolos del teclado compacto: aprieta Shift/AltGr si hace falta (y los suelta al final)
+    extra = (k.m || []).filter((m) => !R.held.has(m));
+    for (const m of extra) keyEvent(m, true);
     keyEvent(k.u, true);
     if (isShift) document.body.classList.add('shift-on');
     // Repetición al mantener (Windows no repite las teclas de SendInput)
@@ -710,6 +795,8 @@ function setupKey(el, k) {
     clearTimeout(repeat);
     el.classList.remove('down');
     keyEvent(k.u, false);
+    for (const m of extra.reverse()) keyEvent(m, false);
+    extra = [];
     if (isShift && !R.held.has(0xe1) && !R.held.has(0xe5)) document.body.classList.remove('shift-on');
   };
   el.addEventListener('pointerdown', down);
@@ -735,6 +822,102 @@ function setupMedia() {
     b.addEventListener('pointercancel', stop);
     b.addEventListener('pointerleave', stop);
   });
+}
+
+// ------------------------------------------------------------ joystick (control de Xbox 360 virtual en la compu)
+// Dibujado como un DualSense. Solo por el host (necesita el driver ViGEmBus en Windows).
+
+const GP = { on: false, avail: null, st: { buttons: 0, lt: 0, rt: 0, lx: 0, ly: 0, rx: 0, ry: 0 }, raf: 0, waiting: null };
+enc.pad = (st) => {
+  const b = new Uint8Array(13);
+  const v = new DataView(b.buffer);
+  b[0] = 10;
+  v.setUint16(1, st.buttons, true);
+  b[3] = st.lt; b[4] = st.rt;
+  v.setInt16(5, st.lx, true); v.setInt16(7, st.ly, true); v.setInt16(9, st.rx, true); v.setInt16(11, st.ry, true);
+  return b;
+};
+const padNeutral = () => { const t = GP.st; return !t.buttons && !t.lt && !t.rt && !t.lx && !t.ly && !t.rx && !t.ry; };
+function padSend() {
+  if (GP.raf) return;
+  GP.raf = requestAnimationFrame(() => { GP.raf = 0; if (viaHost()) R.live.inp.send(enc.pad(GP.st)); });
+}
+
+function setupGamepad() {
+  const root = $('#gp');
+  root.querySelectorAll('[data-gb]').forEach((el) => {
+    const bit = parseInt(el.dataset.gb, 16);
+    const pids = new Set();
+    const set = () => { GP.st.buttons = pids.size ? GP.st.buttons | bit : GP.st.buttons & ~bit; el.classList.toggle('down', pids.size > 0); padSend(); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch { /* nada */ } pids.add(e.pointerId); set(); });
+    const up = (e) => { if (pids.delete(e.pointerId)) set(); };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+  root.querySelectorAll('[data-gt]').forEach((el) => {
+    const key = el.dataset.gt;
+    const pids = new Set();
+    const set = () => { GP.st[key] = pids.size ? 255 : 0; el.classList.toggle('down', pids.size > 0); padSend(); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch { /* nada */ } pids.add(e.pointerId); set(); });
+    const up = (e) => { if (pids.delete(e.pointerId)) set(); };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+  root.querySelectorAll('[data-stick]').forEach((el) => {
+    const [kx, ky] = el.dataset.stick === 'l' ? ['lx', 'ly'] : ['rx', 'ry'];
+    const knob = el.querySelector('.knob');
+    let pid = null;
+    const move = (e) => {
+      const r = el.getBoundingClientRect();
+      const rad = r.width / 2;
+      let dx = (e.clientX - (r.left + rad)) / rad, dy = (e.clientY - (r.top + rad)) / rad;
+      const m = Math.hypot(dx, dy);
+      if (m > 1) { dx /= m; dy /= m; }
+      knob.style.transform = `translate(${dx * rad * 0.55}px, ${dy * rad * 0.55}px)`;
+      GP.st[kx] = clamp16(dx * 32767);
+      GP.st[ky] = clamp16(-dy * 32767); // en XInput, arriba es positivo
+      padSend();
+    };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); if (pid !== null) return; pid = e.pointerId; try { el.setPointerCapture(pid); } catch { /* nada */ } el.classList.add('down'); move(e); });
+    el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) move(e); });
+    const up = (e) => {
+      if (e.pointerId !== pid) return;
+      pid = null;
+      el.classList.remove('down');
+      knob.style.transform = '';
+      GP.st[kx] = 0; GP.st[ky] = 0;
+      padSend();
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+  $('#btnGp').addEventListener('click', () => setGamepad(!GP.on));
+  $('#gpOff').addEventListener('click', () => setGamepad(false));
+}
+
+function resetGamepad() {
+  GP.st = { buttons: 0, lt: 0, rt: 0, lx: 0, ly: 0, rx: 0, ry: 0 };
+  document.querySelectorAll('#gp .down').forEach((e) => e.classList.remove('down'));
+  document.querySelectorAll('#gp .knob').forEach((k) => { k.style.transform = ''; });
+}
+
+function showGamepad(on) {
+  GP.on = on;
+  $('#gp').hidden = !on;
+  document.body.classList.toggle('gp-on', on);
+  $('#btnGp').classList.toggle('on', on);
+  if (!on) resetGamepad();
+  setTimeout(applyZoom, 50);
+}
+
+function setGamepad(on) {
+  if (!on) { if (GP.on && viaHost()) { R.live.inp.send(enc.pad({ buttons: 0, lt: 0, rt: 0, lx: 0, ly: 0, rx: 0, ry: 0 })); sendCtl({ t: 'pad', on: false }); } showGamepad(false); return; }
+  if (!R.live || !R.live.connected) { setStatus('El joystick necesita la pantalla conectada (programa de la compu).'); return; }
+  if (GP.avail === false) { setStatus('Para el joystick, la compu necesita el driver ViGEmBus (ver README).'); return; }
+  setStatus('Conectando el joystick…');
+  sendCtl({ t: 'pad', on: true });
+  clearTimeout(GP.waiting);
+  GP.waiting = setTimeout(() => setStatus('La compu no respondió. ¿PC Unlock Host está actualizado (1.1.0 o más nuevo)?'), 4000);
 }
 
 // ------------------------------------------------------------ zoom y desplazamiento del video
@@ -764,7 +947,7 @@ function setupZoom() {
     }
   };
   st.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button, .overlay')) return;
+    if (e.target.closest('button, .overlay, .gp-c')) return;
     e.preventDefault();
     st.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -839,7 +1022,37 @@ function setupRemote() {
   setupPad();
   setupMedia();
   setupZoom();
-  for (const name of cfg.panels || ['pad']) { const p = $('#panel-' + name); if (p) { p.hidden = false; document.querySelector(`[data-panel="${name}"]`)?.classList.add('on'); } }
+  setupGamepad();
+  landscapeMQ.addEventListener('change', () => { buildKeyboard(); setTimeout(applyZoom, 100); });
+  const setKbMode = (mode) => {
+    if (landscapeMQ.matches) cfg.kbLand = mode; else cfg.kbPort = mode;
+    saveCfg();
+    buildKeyboard();
+  };
+  $('#kbMode').addEventListener('click', () => setKbMode(kbIsCompact() ? 'full' : 'compact'));
+  $('#rKbSel').addEventListener('change', (e) => setKbMode(e.target.value));
+  document.querySelectorAll('#rFps [data-fps]').forEach((b) => b.addEventListener('click', () => {
+    cfg.fps = Number(b.dataset.fps);
+    saveCfg();
+    document.querySelectorAll('#rFps [data-fps]').forEach((x) => x.classList.toggle('on', x === b));
+    $('#rFpsSel').value = String(cfg.fps);
+  }));
+  $('#rFpsSel').value = String(cfg.fps || 60);
+  $('#rFpsSel').addEventListener('change', (e) => {
+    cfg.fps = Number(e.target.value);
+    saveCfg();
+    sendCtl({ t: 'fps', v: cfg.fps });
+  });
+  // Que iOS no "agarre" los toques: sin selección de texto, lupa, menú de copiar ni zoom de la página.
+  const NO_GESTURE = '#pad, #kbd, .media, #stage';
+  document.addEventListener('touchstart', (e) => {
+    if (!R.visible) return;
+    const t = e.target;
+    if (t.closest('.overlay button, .seg button, #rFsExit, #gpOff, select, input, label')) return;
+    if (t.closest(NO_GESTURE)) e.preventDefault();
+  }, { passive: false });
+  for (const ev of ['contextmenu', 'selectstart', 'gesturestart']) document.addEventListener(ev, (e) => { if (R.visible) e.preventDefault(); });
+  for (const name of cfg.panels || ['kbd', 'pad']) { const p = $('#panel-' + name); if (p) { p.hidden = false; document.querySelector(`[data-panel="${name}"]`)?.classList.add('on'); } }
   document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => togglePanel(b.dataset.panel)));
   $('#btnRemote').addEventListener('click', showRemote);
   $('#rBack').addEventListener('click', showHome);
@@ -848,12 +1061,15 @@ function setupRemote() {
   $('#rLockUnlock').addEventListener('click', (e) => remoteUnlock(e.currentTarget));
   $('#rRenew').addEventListener('click', renewSession);
   $('#rEnd').addEventListener('click', () => endLive('Sesión cortada.'));
-  $('#rFull').addEventListener('click', () => {
-    const on = document.body.classList.toggle('fs');
+  // Pantalla completa: solo esconde la barra de arriba para ganar lugar. Nada se superpone al video.
+  const setFs = (on) => {
+    document.body.classList.toggle('fs', on);
     if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
     if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    setTimeout(applyZoom, 50);
-  });
+    setTimeout(applyZoom, 80);
+  };
+  $('#rFull').addEventListener('click', () => setFs(true));
+  $('#rFsExit').addEventListener('click', () => setFs(false));
   R.quality = cfg.saver ? 'saver' : 'auto';
   $('#rSaver').checked = !!cfg.saver;
   $('#rSaver').addEventListener('change', (e) => {
@@ -916,6 +1132,6 @@ function setupRemote() {
 // ------------------------------------------------------------ inicio
 
 setupRemote();
-Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc, viaHost, espActive });
+Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc, viaHost, espActive, GP, kb, buildKeyboard });
 if (!cfg.credId || !cfg.host) showSettings();
 connect();

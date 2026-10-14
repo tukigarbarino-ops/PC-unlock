@@ -11,6 +11,7 @@ const { parsePairCode, verifyAssertion, ReplayGuard, sdpFingerprint, b64u } = re
 const identity = require('./identity');
 const { decode } = require('./protocol');
 const { Injector } = require('./input');
+const { Gamepad } = require('./gamepad');
 
 const VERSION = app.getVersion();
 const SESSION_SECS = Number(process.env.PCU_SESSION_SECS) || 3600; // máximo 1 hora por Face ID
@@ -30,6 +31,7 @@ let mqttState = 'sin configurar';
 let locked = false;
 let sess = null;              // sesión activa: { n, fo, fa, exp, timer, monitor, quality, connected, stats }
 const guard = new ReplayGuard();
+const gamepad = new Gamepad({ log: (m) => log(m) });
 const injector = new Injector({ simulate: process.env.PCU_SIMULATE_INPUT === '1', log: process.env.PCU_LOG_INPUT ? (m) => log('[input]', m) : null });
 
 const T = () => {
@@ -130,15 +132,16 @@ async function handleOpen(msg) {
   }
   endSession('nueva sesión');
   const exp = Math.floor(Date.now() / 1000) + SESSION_SECS;
-  sess = { n: cmd.n, fo, fa: null, exp, connected: false, monitor: cmd.m ?? cfg.get('monitor', null), quality: cmd.q === 'saver' ? 'saver' : 'auto' };
+  sess = { n: cmd.n, fo, fa: null, exp, connected: false, monitor: cmd.m ?? cfg.get('monitor', null), quality: cmd.q === 'saver' ? 'saver' : 'auto',
+    fps: cmd.r === 60 ? 60 : 30 };
   armExpiry();
   const mine = sess;
   setTimeout(() => { if (sess === mine && !sess.connected) endSession('no se pudo conectar en 30 s'); }, 30000);
-  log('sesión abierta, vence', new Date(exp * 1000).toLocaleTimeString());
+  log('sesión abierta, vence', new Date(exp * 1000).toLocaleTimeString(), `(${sess.fps} fps)`);
   try {
     const src = await pickSource(sess.monitor);
     const ice = sanitizeIce(msg.ice);
-    const answer = await rtcStart({ offer: msg.sdp, ice, source: src, quality: sess.quality });
+    const answer = await rtcStart({ offer: msg.sdp, ice, source: src, quality: sess.quality, fps: sess.fps });
     const fa = sdpFingerprint(answer);
     sess.fa = fa;
     reply({ type: 'answer', n: cmd.n, sdp: answer, exp, hs: identity.sign(idPem, identity.answerPayload(cmd.n, fo, fa, exp)) });
@@ -180,6 +183,7 @@ function endSession(why) {
   clearTimeout(sess.timer);
   sess = null;
   injector.releaseAll();
+  gamepad.unplug();
   if (rtcWin && !rtcWin.isDestroyed()) rtcWin.destroy();
   rtcWin = null;
   publishState();
@@ -261,13 +265,18 @@ function rtcStart(opts) {
 function setupRtcIpc() {
   ipcMain.on('rtc-input', (e, data) => {
     if (!sess || e.sender !== rtcWin?.webContents) return;
-    try { injector.apply(decode(Buffer.from(data))); } catch (err) { log(err.message); }
+    try {
+      const cmds = decode(Buffer.from(data));
+      for (const c of cmds) if (c.op === 10) gamepad.set(c.pad); else if (c.op === 9) gamepad.touch();
+      injector.apply(cmds.filter((c) => c.op !== 10));
+    } catch (err) { log(err.message); }
   });
   ipcMain.on('rtc-ctl', async (e, m) => {
     if (!sess || e.sender !== rtcWin?.webContents || !m || typeof m !== 'object') return;
     switch (m.t) {
       case 'hello':
-        rtcSend('ctl', { t: 'hello', v: VERSION, exp: sess.exp, locked, monitors: await monitors(), monitor: sess.source?.displayId });
+        rtcSend('ctl', { t: 'hello', v: VERSION, exp: sess.exp, locked, monitors: await monitors(), monitor: sess.source?.displayId,
+          fps: sess.fps, pad: Gamepad.available() });
         break;
       case 'monitor': {
         const src = await pickSource(m.id);
@@ -284,6 +293,15 @@ function setupRtcIpc() {
         rtcSend('quality', sess.quality);
         break;
       case 'renew': handleRenew(m); break;
+      case 'fps':
+        sess.fps = m.v === 60 ? 60 : 30;
+        rtcSend('fps', sess.fps);
+        break;
+      case 'pad': {
+        const err = m.on ? gamepad.plug() : (gamepad.unplug(), '');
+        rtcSend('ctl', { t: 'pad', on: !!m.on && !err, err });
+        break;
+      }
       case 'bye': endSession('la app cerró la sesión'); break;
       default: break;
     }
@@ -408,6 +426,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   injector.close();
+  gamepad.close();
   if (client?.connected && pairing) client.publish(T().state, '{"online":false}', { qos: 1, retain: true });
   client?.end();
 });

@@ -140,9 +140,18 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   `renewed{n,exp,hs}` (`PCU-HOST-RENEW|n|fo|fa|exp`), `bye{why}`, `error`; app→host `monitor{id}`, `quality{mode}`,
   `renew{ad,cd,sig}` (challenge `c:"rr"` con el mismo `f` y `h`), `pause`/`resume` (app en segundo plano), `bye`.
 - Sesión máx. `SESSION_SECS` = 3600 s desde el último Face ID; si no conecta en 30 s, se descarta.
+- Host 1.1.0: challenge `rs` con `r` = 30|60 (fps); ctl app→host `fps{v}` (re-captura con el tope nuevo; 60 fps → hasta
+  15 Mb/s, 30 → 8 Mb/s; ahorro de datos 12 fps) y `pad{on}` → host `pad{on,err}`; `hello` trae `fps` y `pad`
+  (driver disponible).
+- **Joystick** (`host/src/gamepad.js`): control de Xbox 360 virtual con **ViGEmBus** (en la PC del usuario ya está, v1.21)
+  hablando el protocolo de ViGEmClient con DeviceIoControl vía koffi (SetupDi para la ruta del bus, CHECK_VERSION,
+  PLUGIN serial 1..16, WAIT_READY, XUSB_SUBMIT_REPORT, UNPLUG). Ojo: los punteros de salida en koffi van con
+  `koffi.inout(koffi.pointer('uint32'))`. Se desenchufa al cortar la sesión; vuelve a reposo a los 2 s sin mensajes.
+  `test/manual-gamepad.js` lo verifica con XInput.
 - **Entrada** (`in`, binario, igual para host y ESP): `01 u` tecla abajo, `02 u` arriba (uso HID), `03 dx dy` (i16 LE),
   `04 m`/`05 m` botón abajo/arriba (1 izq, 2 der, 4 medio), `06 v h` rueda (i16, 120 = un paso), `07 uu` multimedia
-  (uso Consumer u16), `08` soltar todo, `09` latido. La app manda latido cada 500 ms mientras haya algo apretado;
+  (uso Consumer u16), `08` soltar todo, `09` latido, `0A` joystick (13 B: u16 botones con bits XUSB, u8 L2, u8 R2,
+  i16 LX LY RX RY, Y+ = arriba; solo host). La app manda latido cada 500 ms mientras haya algo apretado;
   el host suelta todo a los 2 s sin mensajes. La app repite teclas mantenidas (SendInput no repite).
 
 ## Pruebas que existen
@@ -167,6 +176,12 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
 - **Pantalla, mouse y teclado dentro de la misma web app** (no apps aparte; Chrome Remote Desktop no se puede
   embeber). Implementado con PC Unlock Host (`host/`).
 - Video con `playsinline` y `muted`. Distribución del teclado: **Español (Latinoamérica)**.
+- Pedidos del usuario ya hechos (13/10): horizontal tipo laptop (video izq., teclado compacto arriba + touchpad abajo,
+  sin superponer; media query `(orientation: landscape) and (max-height: 600px)`), ⛶ solo esconde la barra, teclado
+  compacto con capas ?123/#+= (símbolos mandan su combinación LatAm), clic sostenido = tocar y volver a apoyar
+  (350 ms) con el mismo botón, doble toque = doble clic, bloqueo de gestos de iOS (`touchstart` con preventDefault no
+  pasivo + `user-select: none` + `-webkit-touch-callout: none`), selector 30/60 fps, joystick DualSense superpuesto
+  (en horizontal oculta la columna derecha). Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.
 - **Teclado propio dibujado en la app** (no el del iPhone): todas las letras y números, F1–F12, Esc, Tab, Enter,

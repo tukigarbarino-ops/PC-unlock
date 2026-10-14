@@ -17,6 +17,17 @@ test('decodifica varias órdenes en un mensaje', () => {
   assert.throws(() => decode(Buffer.from([0x55])), /inválido/);
 });
 
+test('decodifica el estado del joystick', () => {
+  const b = Buffer.alloc(13);
+  b[0] = 0x0a; b.writeUInt16LE(0x1000 | 0x0001, 1); b[3] = 0; b[4] = 255;
+  b.writeInt16LE(-32767, 5); b.writeInt16LE(100, 7); b.writeInt16LE(0, 9); b.writeInt16LE(32767, 11);
+  assert.deepEqual(decode(Buffer.concat([b, Buffer.from([0x09])])), [
+    { op: OP.PAD, pad: { buttons: 0x1001, lt: 0, rt: 255, lx: -32767, ly: 100, rx: 0, ry: 32767 } },
+    { op: OP.PING },
+  ]);
+  assert.throws(() => decode(b.subarray(0, 12)), /inválido/);
+});
+
 test('todas las teclas del teclado de la app tienen scancode', () => {
   const needed = [];
   for (let u = 0x04; u <= 0x45; u++) needed.push(u); // letras, números, Enter..F12

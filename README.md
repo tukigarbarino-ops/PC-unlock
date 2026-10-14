@@ -82,13 +82,29 @@ iPhone (vista "Remoto")
   y modo **Ahorro de datos** (~300 kb/s) para datos móviles. Zoom con dos dedos, doble toque = sin zoom,
   pantalla completa y vista horizontal. Si hay varios monitores, se elige cuál ver.
 - **Touchpad** cuadrado: arrastrar mueve el puntero (con aceleración), tocar la mitad izquierda = clic izquierdo,
-  la mitad derecha = clic derecho, dos dedos = scroll (o un toque con dos dedos = clic derecho),
-  tocar y volver a apoyar = arrastrar con el clic apretado.
-- **Teclado propio** con la distribución **Español (Latinoamérica)**: letras, Ñ, números y símbolos, F1–F12, Esc,
-  Tab, Enter, Borrar, Espacio, flechas, Ins, Supr, Inicio, Fin, RePág, AvPág, ImpPnt. **Ctrl, Shift, Alt, AltGr y Win
-  están apretados solo mientras tenés el dedo encima** (multitouch): para Ctrl+C apoyás Ctrl con un dedo y tocás C
-  con otro. Mantener una tecla la repite.
-- **Multimedia:** anterior, play/pausa, siguiente, silencio, volumen − y +.
+  la mitad derecha = clic derecho, dos dedos = scroll (o un toque con dos dedos = clic derecho).
+  **Tocar, soltar y volver a apoyar manteniendo = clic sostenido** (arrastrar ventanas o pestañas, seleccionar) hasta
+  que levantás el dedo; **doble toque = doble clic**.
+- **Teclado propio** con la distribución **Español (Latinoamérica)**, en dos versiones:
+  - **Completo** (por defecto en vertical): letras, Ñ, números y símbolos, F1–F12, Esc, Tab, Enter, Borrar, Espacio,
+    flechas, Ins, Supr, Inicio, Fin, RePág, AvPág, ImpPnt, AltGr.
+  - **Compacto** (por defecto en horizontal), como el del celular: letras y Ñ, y las capas **?123** y **#+=** con
+    números y símbolos. Cada símbolo se escribe directo (la app manda la combinación: `@` = AltGr+Q, `!` = Shift+1, etc.).
+  - Se cambia con "Teclado completo/compacto" arriba del teclado (en horizontal, en ⚙).
+  - **Ctrl, Shift, Alt, AltGr y Win están apretados solo mientras tenés el dedo encima** (multitouch): para Ctrl+C
+    apoyás Ctrl con un dedo y tocás C con otro. Mantener una tecla la repite.
+- **Horizontal, como una laptop:** video a la izquierda; a la derecha el teclado arriba y el touchpad abajo, sin tapar
+  nada. **⛶** esconde la barra de arriba para ganar lugar (nada se superpone).
+- **Fluidez 30 o 60 fps:** se elige antes de conectar (y en ⚙ durante la sesión). Con la pantalla quieta se mandan
+  pocos cuadros (es normal ver 1–2 fps): solo se transmite lo que cambia.
+- La vista Remoto bloquea los gestos de iOS (selección de texto, lupa, menú de copiar) en el video, el touchpad y el teclado.
+- **Multimedia (♫):** anterior, play/pausa, siguiente, silencio, volumen − y +.
+- **Joystick (🎮):** controles de DualSense encima del video (dos palancas, △○✕□, flechas, L1/L2/R1/R2, PS, Share,
+  Options). En la compu aparece un **control de Xbox 360** (el que reconocen casi todos los juegos): ✕=A, ○=B, □=X,
+  △=Y, Share=Back, Options=Start, PS=Guide. Necesita el driver gratuito **ViGEmBus** instalado en Windows
+  (github.com/nefarius/ViGEmBus → Releases; si usás DS4Windows o HidHide probablemente ya lo tenés). Solo con el
+  programa de la compu (no por la ESP). Si se corta la conexión, el control vuelve a reposo a los 2 s.
+  "✕ 🎮" lo cierra y desenchufa el control virtual.
 - Touchpad, teclado y multimedia son paneles que abrís y cerrás con los botones de arriba.
 - **Compu bloqueada:** Windows no deja ver ni controlar la pantalla de bloqueo. La app muestra un aviso con
   el botón **Desbloquear** (por la ESP, con su propio Face ID).
@@ -164,13 +180,15 @@ npm test          # verificación WebAuthn (mismos fixtures que la ESP), protoco
 npm start         # corre el host
 npm run dist      # arma dist/PC-Unlock-Host-Setup-<versión>.exe
 node test/manual-input.js   # prueba real e inofensiva de SendInput (mueve el puntero y lo devuelve; Shift)
+node test/manual-gamepad.js # enchufa un control virtual (ViGEmBus), lo lee con XInput y lo desenchufa
 ```
 Publicar una versión: subir `version` en `host/package.json`, commit, y `git tag host-vX.Y.Z && git push --tags`.
 
 ### Prueba de punta a punta
 `tools/e2e/remote.e2e.js` levanta un broker MQTT local, sirve `web/`, abre la app en Edge con un autenticador
 WebAuthn virtual y corre el **host real** (entrada simulada). Verifica emparejamiento, video, touchpad, teclado
-multitouch, multimedia, soltar a los 2 s, aviso de bloqueo, renovación, vencimiento y ataques desde el broker
+multitouch, clic sostenido y doble clic, teclado compacto en horizontal (sin superponer), 60 fps, joystick (leído con
+XInput), multimedia, soltar a los 2 s, aviso de bloqueo, renovación, vencimiento y ataques desde el broker
 (fingerprint cambiado, challenge para otra compu, aserción vieja o repetida, respuesta del host alterada,
 host impostor).
 ```
