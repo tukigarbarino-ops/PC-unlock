@@ -135,6 +135,9 @@ body.fs .fs-exit { display: grid; }
 .switch { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .switch input { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: var(--accent); }
 .hint.center { text-align: center; }
+.diag { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #12151b; border: 1px solid var(--line); font-size: 13px; }
+.diag .hint { margin-top: 3px; }
+#rDiag.warn { color: var(--warn); }
 
 .panel { margin-top: 8px; }
 .pad {

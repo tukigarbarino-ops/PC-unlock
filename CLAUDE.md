@@ -184,6 +184,10 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   (en horizontal oculta la columna derecha), L3/R3 con botón propio o doble toque en la palanca (300 ms) y mantener.
   Ajuste 13/10: en horizontal la columna derecha mide 30 % (38 % si el teclado está abierto, clase `body.kb-open`),
   botones de arriba de 44 px, L1/R1 contra el borde y L2/R2 arriba corridos hacia el centro (escalonados).
+  Diagnóstico de fluidez (⚙): la línea de estado muestra "compu X → iPhone Y fps" y el panel dice dónde está el cuello
+  (host `stats.limit` = qualityLimitationReason; iPhone: framesDecoded/s, pérdida, RTT, jitter). Medido el 13/10 con
+  Rocket League abierto en la PC: captura + NVENC a 2560×1440 dan ~58 fps a un cliente local → si en el iPhone van
+  <20 fps, el problema está en la red o el iPhone, no en la captura. Pendiente: que el usuario mande el diagnóstico.
   Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.

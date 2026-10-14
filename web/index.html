@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1.8">
+  <link rel="stylesheet" href="style.css?v=1.9">
 </head>
 <body>
   <main id="app">
@@ -156,6 +156,11 @@
             </label>
             <label class="switch"><input type="checkbox" id="rSaver"> Ahorro de datos</label>
           </div>
+          <div class="diag">
+            <b>Diagnóstico de fluidez</b>
+            <div id="rDiag" class="hint">Se calcula con la sesión conectada.</div>
+            <div id="rDiagNum" class="hint"></div>
+          </div>
         </div>
         <div id="panel-media" class="panel" hidden>
           <div class="media">
@@ -265,7 +270,7 @@
   </main>
 
   <script src="vendor/mqtt-5.15.2.min.js"></script>
-  <script src="app.js?v=1.8"></script>
-  <script src="remote.js?v=1.8"></script>
+  <script src="app.js?v=1.9"></script>
+  <script src="remote.js?v=1.9"></script>
 </body>
 </html>

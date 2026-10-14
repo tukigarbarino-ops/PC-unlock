@@ -399,6 +399,9 @@ function wireLive(L) {
   });
   L.ctl.onmessage = (ev) => { try { onCtl(JSON.parse(ev.data)); } catch { /* mensaje inválido */ } };
   L.ctl.onclose = () => endLive('La compu cerró la sesión.');
+  clearInterval(D.timer);
+  D.host = null; D.rx = null; D.last = null;
+  D.timer = setInterval(() => rxStats().catch(() => {}), 2000);
   clearInterval(R.pingTimer);
   R.pingTimer = setInterval(() => {
     if (R.held.size || R.buttons) sendInput(enc.ping());
@@ -420,7 +423,8 @@ function onCtl(m) {
     case 'locked': setLocked(!!m.v); break;
     case 'monitor': cfg.monitor = m.id; saveCfg(); break;
     case 'stats':
-      $('#rStats').textContent = `${m.codec || '?'}${m.hw ? ' hw' : ''} · ${m.w}×${m.h} · ${m.fps} fps · ${(m.kbps / 1000).toFixed(1)} Mb/s · ${m.route}`;
+      D.host = m;
+      renderDiag();
       break;
     case 'renewed':
       if (L.renewing && m.n === L.renewing) {
@@ -447,6 +451,7 @@ function endLive(why, fromHost = false) {
   if (!L) return;
   R.live = null;
   clearInterval(R.pingTimer);
+  clearInterval(D.timer);
   releaseAllLocal();
   showGamepad(false);
   try { if (!fromHost && L.ctl.readyState === 'open') L.ctl.send(JSON.stringify({ t: 'bye' })); } catch { /* cerrada */ }
@@ -536,6 +541,62 @@ async function renewSession() {
 }
 
 function sendCtl(m) { if (R.live?.ctl.readyState === 'open') R.live.ctl.send(JSON.stringify(m)); }
+
+// ------------------------------------------------------------ diagnóstico de fluidez: ¿dónde se pierden los cuadros?
+// La compu manda cada 2 s lo que envía (fps, Mb/s y qué la limita según WebRTC); el iPhone mide lo que muestra.
+
+const D = { host: null, rx: null, last: null, timer: 0 };
+
+async function rxStats() {
+  const L = R.live;
+  if (!L || !L.connected) return;
+  const r = await L.pc.getStats();
+  let inb = null, pair = null;
+  r.forEach((s) => {
+    if (s.type === 'inbound-rtp' && s.kind === 'video') inb = s;
+    if (s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s;
+  });
+  if (!inb) return;
+  const prev = D.last;
+  D.last = { t: inb.timestamp, dec: inb.framesDecoded || 0, lost: inb.packetsLost || 0, pk: inb.packetsReceived || 0,
+    drop: inb.framesDropped || 0, frz: inb.totalFreezesDuration || 0 };
+  if (!prev) return;
+  const dt = (D.last.t - prev.t) / 1000;
+  if (dt <= 0) return;
+  const pk = D.last.pk - prev.pk, lost = Math.max(0, D.last.lost - prev.lost);
+  D.rx = {
+    fps: Math.round((D.last.dec - prev.dec) / dt),
+    loss: pk + lost ? (100 * lost) / (pk + lost) : 0,
+    drop: Math.max(0, D.last.drop - prev.drop),
+    freeze: Math.max(0, D.last.frz - prev.frz),
+    rtt: pair && pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null,
+    jitter: inb.jitter != null ? Math.round(inb.jitter * 1000) : null,
+  };
+  renderDiag();
+}
+
+function renderDiag() {
+  const h = D.host, x = D.rx;
+  if (!h) return;
+  const parts = [`${h.codec || '?'}${h.hw ? ' hw' : ''} · ${h.w}×${h.h}`, x ? `compu ${h.fps} → iPhone ${x.fps} fps` : `${h.fps} fps`,
+    `${(h.kbps / 1000).toFixed(1)} Mb/s`, h.route];
+  if (x && x.loss >= 1) parts.push(`pérdida ${x.loss.toFixed(0)}%`);
+  $('#rStats').textContent = parts.join(' · ');
+  let msg, warn = true;
+  if (h.limit === 'bandwidth') msg = `Cuello de botella: la RED. La compu manda menos cuadros porque la conexión no da más (${(h.kbps / 1000).toFixed(1)} Mb/s).`;
+  else if (h.limit === 'cpu') msg = 'Cuello de botella: el codificador de la COMPU (CPU).';
+  else if (x && h.fps >= 40 && x.fps < h.fps * 0.75)
+    msg = `Cuello de botella: entre la red y el iPhone. La compu manda ${h.fps} fps y en el iPhone se muestran ${x.fps}` +
+      (x.loss >= 1 ? ` (se pierde el ${x.loss.toFixed(0)} % de los paquetes: es la red).` : '.');
+  else if (h.fps < 40) msg = `La compu está mandando ${h.fps} fps. Si la pantalla se mueve (un juego), el límite está en la CAPTURA de la compu; con la pantalla quieta es normal.`;
+  else { msg = 'Sin cuello de botella: en el iPhone se ven los cuadros que manda la compu.'; warn = false; }
+  $('#rDiag').textContent = msg;
+  $('#rDiag').classList.toggle('warn', warn);
+  const lim = { none: 'ninguno', bandwidth: 'red', cpu: 'CPU', other: 'otro' }[h.limit] || h.limit || '—';
+  $('#rDiagNum').textContent = [`compu ${h.fps} fps`, x ? `iPhone ${x.fps} fps` : '', x && x.rtt != null ? `latencia ${x.rtt} ms` : '',
+    x && x.jitter != null ? `jitter ${x.jitter} ms` : '', x ? `pérdida ${x.loss.toFixed(1)} %` : '', x && x.drop ? `${x.drop} cuadros descartados` : '',
+    x && x.freeze ? `congelado ${x.freeze.toFixed(1)} s` : '', `límite según la compu: ${lim}`].filter(Boolean).join(' · ');
+}
 
 // ------------------------------------------------------------ protocolo de entrada (igual que host/src/protocol.js)
 
@@ -1153,6 +1214,6 @@ function setupRemote() {
 // ------------------------------------------------------------ inicio
 
 setupRemote();
-Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc, viaHost, espActive, GP, kb, buildKeyboard });
+Object.assign(window.PCU, { verifyCode, R, showRemote, sdpFingerprint, enc, viaHost, espActive, GP, kb, buildKeyboard, D });
 if (!cfg.credId || !cfg.host) showSettings();
 connect();

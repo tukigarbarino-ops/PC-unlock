@@ -87,6 +87,10 @@ async function main() {
     ok('video con playsinline y muted');
     await until(async () => (await page.inputValue('#rFpsSel')) === '60', 5000, 'fps en opciones');
     ok('selector 30/60 fps antes de conectar: la sesión arranca a 60 fps');
+    const diagLine = await until(async () => { const t = await page.textContent('#rStats'); return /compu \d+ → iPhone \d+ fps/.test(t) && t; }, 10000, 'fps en el iPhone');
+    const diag = await page.evaluate(() => [document.querySelector('#rDiag').textContent, document.querySelector('#rDiagNum').textContent]);
+    assert.ok(diag[0] && !/Se calcula/.test(diag[0]) && /límite según la compu/.test(diag[1]), diag.join(' | '));
+    ok(`diagnóstico de fluidez: "${diagLine}" — ${diag[0]}`);
 
     // ---------- touchpad
     const pad = await page.$('#pad');
