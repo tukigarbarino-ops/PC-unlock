@@ -22,7 +22,23 @@ if (process.env.PCU_USERDATA) app.setPath('userData', process.env.PCU_USERDATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 app.setAppUserModelId('io.github.pcunlock.host');
 
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+// Registro también en %APPDATA%\PC Unlock Host\host.log (máx. ~1 MB + uno viejo) para diagnosticar sin capturas.
+// Nunca se registran el código PCU1, contraseñas ni claves.
+const fs = require('node:fs');
+function fileLog(line) {
+  try {
+    if (!app.isReady()) return;
+    const f = path.join(app.getPath('userData'), 'host.log');
+    const st = fs.statSync(f, { throwIfNoEntry: false });
+    if (st && st.size > 1_000_000) fs.renameSync(f, f.replace(/\.log$/, '.old.log'));
+    fs.appendFileSync(f, `${new Date().toLocaleString('sv')} ${line}
+`);
+  } catch { /* sin registro */ }
+}
+const log = (...a) => {
+  console.log(new Date().toISOString().slice(11, 19), ...a);
+  fileLog(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '));
+};
 
 let cfg, tray, settingsWin = null, rtcWin = null, client = null;
 let pairing = null;           // { topic, key, mqtt }
@@ -312,7 +328,12 @@ function setupRtcIpc() {
     if (st === 'connected') { sess.connected = true; refreshUi(); }
     if (st === 'failed' || st === 'closed' || st === 'gone') endSession('se cortó la conexión');
   });
-  ipcMain.on('rtc-stats', (e, s) => { if (sess && e.sender === rtcWin?.webContents) { sess.stats = s; if (process.env.PCU_LOG_STATS) log('stats', JSON.stringify(s)); } });
+  ipcMain.on('rtc-stats', (e, s) => {
+    if (!sess || e.sender !== rtcWin?.webContents) return;
+    sess.stats = s;
+    if (process.env.PCU_LOG_STATS) log('stats', JSON.stringify(s));
+    else fileLog('stats ' + JSON.stringify(s));
+  });
   ipcMain.on('rtc-log', (_e, m) => log('[rtc]', m));
 }
 

@@ -105,7 +105,10 @@ iPhone (vista "Remoto")
   △=Y, Share=Back, Options=Start, PS=Guide. Necesita el driver gratuito **ViGEmBus** instalado en Windows
   (github.com/nefarius/ViGEmBus → Releases; si usás DS4Windows o HidHide probablemente ya lo tenés). Solo con el
   programa de la compu (no por la ESP). Si se corta la conexión, el control vuelve a reposo a los 2 s.
-  "✕ 🎮" lo cierra y desenchufa el control virtual.
+  "✕ 🎮" lo cierra y desenchufa el control virtual. Las palancas llegan al tope con poco recorrido del dedo.
+- **Diagnóstico (⚙ → Diagnóstico de fluidez):** dice cuántos fps manda la compu y cuántos se ven en el iPhone, y dónde
+  está el cuello de botella (red, compu o iPhone). El programa de la compu además guarda un registro en
+  `%APPDATA%\PC Unlock Host\host.log`.
 - Touchpad, teclado y multimedia son paneles que abrís y cerrás con los botones de arriba.
 - **Compu bloqueada:** Windows no deja ver ni controlar la pantalla de bloqueo. La app muestra un aviso con
   el botón **Desbloquear** (por la ESP, con su propio Face ID).

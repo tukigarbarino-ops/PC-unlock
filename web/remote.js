@@ -929,15 +929,20 @@ function setupGamepad() {
     const click = el.dataset.stick === 'l' ? 0x0040 : 0x0080; // L3 / R3
     const knob = el.querySelector('.knob');
     let pid = null, lastUp = 0, clicking = false;
+    // Sensible: llega al tope con el dedo al 60 % del radio (con un poquito de zona muerta en el centro).
+    // El botón de la palanca se puede estirar más allá del borde para que se vea hacia dónde va.
+    const FULL = 0.6, DEAD = 0.06, TRAVEL = 0.95;
     const move = (e) => {
       const r = el.getBoundingClientRect();
       const rad = r.width / 2;
-      let dx = (e.clientX - (r.left + rad)) / rad, dy = (e.clientY - (r.top + rad)) / rad;
-      const m = Math.hypot(dx, dy);
-      if (m > 1) { dx /= m; dy /= m; }
-      knob.style.transform = `translate(${dx * rad * 0.55}px, ${dy * rad * 0.55}px)`;
-      GP.st[kx] = clamp16(dx * 32767);
-      GP.st[ky] = clamp16(-dy * 32767); // en XInput, arriba es positivo
+      const fx = (e.clientX - (r.left + rad)) / rad, fy = (e.clientY - (r.top + rad)) / rad;
+      const m = Math.hypot(fx, fy);
+      const v = m <= DEAD ? 0 : Math.min(1, (m - DEAD) / (FULL - DEAD)); // 0..1
+      const ux = m ? fx / m : 0, uy = m ? fy / m : 0;
+      const vis = Math.min(m, 1.4) / 1.4 * TRAVEL;
+      knob.style.transform = `translate(${ux * vis * rad}px, ${uy * vis * rad}px)`;
+      GP.st[kx] = clamp16(ux * v * 32767);
+      GP.st[ky] = clamp16(-uy * v * 32767); // en XInput, arriba es positivo
       padSend();
     };
     el.addEventListener('pointerdown', (e) => {

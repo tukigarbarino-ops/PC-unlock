@@ -17,6 +17,24 @@ async function capture(src) {
   return t;
 }
 
+// El iPhone (Safari) ofrece H.264 "Constrained Baseline" (42e0xx) y "Constrained High" (640cxx). Con Constrained Baseline,
+// Chromium NO usa el codificador por hardware (NVENC vía Media Foundation) sino OpenH264 por software: a 2560×1440 da
+// 10-25 fps. Con "Baseline" (4200xx) sí usa NVENC (55+ fps). Así que la oferta se negocia internamente como Baseline y en
+// la respuesta se vuelve a poner el perfil original de cada payload type. Es compatible: NVENC no usa FMO/ASO ni slices
+// redundantes (lo único que distingue Baseline de Constrained Baseline). La seguridad no cambia: lo firmado es el fingerprint DTLS.
+function fmtpProfiles(sdp) {
+  const m = new Map();
+  for (const x of sdp.matchAll(/^a=fmtp:(\d+) .*profile-level-id=([0-9a-fA-F]{6})/gm)) m.set(x[1], x[2]);
+  return m;
+}
+function offerForHwEncoder(sdp) {
+  return sdp.replace(/(profile-level-id=)42e0([0-9a-fA-F]{2})/gi, '$14200$2');
+}
+function restoreProfiles(answer, offerProfiles) {
+  return answer.replace(/^(a=fmtp:(\d+) .*profile-level-id=)([0-9a-fA-F]{6})/gm, (all, pre, pt) =>
+    (offerProfiles.has(pt) ? pre + offerProfiles.get(pt) : all));
+}
+
 function iceDone(ms) {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve();
@@ -105,7 +123,9 @@ host.onStart(async (o) => {
       // "disconnected" puede volver solo; si dura más de 10 s se da por cortada
       if (st === 'disconnected') discTimer = setTimeout(() => host.state('failed'), 10000);
     });
-    await pc.setRemoteDescription({ type: 'offer', sdp: o.offer });
+    const offerProfiles = fmtpProfiles(o.offer);
+    host.log('H.264 que ofrece el cliente: ' + ([...new Set(offerProfiles.values())].join(', ') || 'ninguno'));
+    await pc.setRemoteDescription({ type: 'offer', sdp: offerForHwEncoder(o.offer) });
     const tr = pc.getTransceivers().find((t) => t.receiver.track && t.receiver.track.kind === 'video');
     if (!tr) throw new Error('La oferta no trae video');
     tr.direction = 'sendonly';
@@ -118,7 +138,7 @@ host.onStart(async (o) => {
     } catch (err) { host.log('codecs: ' + err.message); }
     await pc.setLocalDescription(await pc.createAnswer());
     await iceDone(4000);
-    host.answer({ sdp: pc.localDescription.sdp });
+    host.answer({ sdp: restoreProfiles(pc.localDescription.sdp, offerProfiles) });
     setInterval(() => stats().catch((e) => host.log('stats: ' + e.message)), 2000);
   } catch (err) {
     host.answer({ error: err.message || String(err) });

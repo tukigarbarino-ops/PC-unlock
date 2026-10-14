@@ -187,7 +187,13 @@ locked, sess, t`), `pcu/<t>/host/in` (app → host), `pcu/<t>/host/out` (host �
   Diagnóstico de fluidez (⚙): la línea de estado muestra "compu X → iPhone Y fps" y el panel dice dónde está el cuello
   (host `stats.limit` = qualityLimitationReason; iPhone: framesDecoded/s, pérdida, RTT, jitter). Medido el 13/10 con
   Rocket League abierto en la PC: captura + NVENC a 2560×1440 dan ~58 fps a un cliente local → si en el iPhone van
-  <20 fps, el problema está en la red o el iPhone, no en la captura. Pendiente: que el usuario mande el diagnóstico.
+  <20 fps, el problema está en la red o el iPhone, no en la captura.
+  **Causa real encontrada (host 1.2.0):** Safari ofrece H.264 Constrained Baseline (42e01f) + Constrained High (640c1f);
+  Chromium solo usa NVENC (Media Foundation) con Baseline 42001f y con 42e01f cae a OpenH264 por software (10–25 fps a
+  1440p). Fix en `host/src/rtc/rtc.js`: la oferta se negocia internamente como 4200xx y en la respuesta se restaura el
+  perfil de cada payload type. `tools/e2e/encoder-probe.js` lo verifica (falla si con oferta tipo iPhone no hay hardware).
+  El host 1.2.0 escribe `%APPDATA%\PC Unlock Host\host.log` (eventos + stats cada 2 s de la sesión) para diagnosticar.
+  Joystick: palancas más chicas (29cqh), tope al 60 % del radio, zona muerta 6 %, el botón se estira hasta 95 % del radio.
   Ojo con nombres de clase: `.down` = apretado (no usarlo para posiciones).
 - **Touchpad**: cuadrado como el de una laptop; arrastrar mueve el puntero; tocar mitad izquierda = clic izquierdo,
   mitad derecha = clic derecho; dos dedos = scroll.
